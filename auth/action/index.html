@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Scribble — Account</title>
+<meta name="description" content="Confirm your email address or set a new password for your Scribble account." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,300;8..60,500&display=swap" rel="stylesheet" />
+
+<style>
+  /* Scribble's dark palette, lifted from frontend/src/styles/index.css. This
+     page is deliberately standalone — no build step, no shared stylesheet —
+     so it can be dropped into the plain-static owenis.me site as-is. */
+  :root {
+    --base-950: 27 26 24;
+    --base-900: 37 37 35;
+    --base-600: 82 77 71;
+    --accent-400: 255 255 255;
+    --accent-500: 245 240 235;
+    --accent-700: 156 152 145;
+    --slate-200: 231 225 218;
+    --slate-400: 156 152 145;
+    --slate-500: 130 124 115;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgb(var(--base-950));
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .shell { width: 100%; max-width: 24rem; text-align: center; }
+  .logo {
+    margin: 0 auto 28px;
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 12px;
+    color: rgb(var(--base-950));
+    background: linear-gradient(to bottom right, rgb(var(--accent-500)), rgb(var(--accent-700)));
+    box-shadow: 0 0 0 1px rgb(var(--accent-500) / 0.12), 0 8px 30px -8px rgb(var(--accent-500) / 0.25);
+  }
+  h1 {
+    margin: 0 0 12px;
+    font-family: "Source Serif 4", ui-serif, Georgia, serif;
+    font-weight: 300;
+    font-size: 1.5rem;
+    letter-spacing: -0.01em;
+    color: #fff;
+  }
+  p { margin: 0; font-size: 0.875rem; line-height: 1.6; color: rgb(var(--slate-400)); }
+  .sub { margin-bottom: 20px; }
+  .icon { display: block; margin: 0 auto 16px; }
+  .ok { color: #34d399; }
+  .bad { color: #f87171; }
+  .muted { color: rgb(var(--slate-500)); }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+  a.btn, button.btn {
+    margin-top: 28px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border: 0; border-radius: 8px;
+    padding: 10px 16px;
+    font: inherit; font-size: 0.875rem; font-weight: 500;
+    text-decoration: none; cursor: pointer;
+    color: rgb(var(--base-950));
+    background: rgb(var(--accent-500));
+    transition: background-color 120ms ease;
+  }
+  a.btn:hover, button.btn:hover { background: rgb(var(--accent-400)); }
+
+  form { margin: 0; text-align: left; display: flex; flex-direction: column; gap: 8px; }
+  .field { position: relative; }
+  input {
+    width: 100%;
+    border: 1px solid rgb(var(--base-600) / 0.6);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font: inherit; font-size: 0.875rem;
+    color: rgb(var(--slate-200));
+    background: rgb(var(--base-900) / 0.6);
+  }
+  input::placeholder { color: rgb(var(--slate-500)); }
+  input:focus { outline: none; border-color: rgb(var(--accent-500) / 0.5); }
+  .peek {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    border: 0; background: none; padding: 4px; cursor: pointer;
+    color: rgb(var(--slate-500)); line-height: 0;
+  }
+  .peek:hover { color: rgb(var(--slate-200)); }
+  .err { margin: 0; font-size: 0.75rem; color: #f87171; }
+  button.submit {
+    margin-top: 4px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%;
+    border: 0; border-radius: 8px;
+    padding: 9px 12px;
+    font: inherit; font-size: 0.875rem; font-weight: 500;
+    color: rgb(var(--base-950)); background: rgb(var(--accent-500) / 0.9);
+    cursor: pointer;
+  }
+  button.submit:hover { background: rgb(var(--accent-500)); }
+  button.submit:disabled { opacity: 0.5; cursor: default; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <div class="logo" aria-hidden="true">
+    <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+      <path d="M16 6c1 6 3 9 10 10-7 1-9 4-10 10-1-6-3-9-10-10 7-1 9-4 10-10Z" fill="currentColor" />
+    </svg>
+  </div>
+  <div id="view" role="status" aria-live="polite">
+    <svg class="icon spin muted" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+    <p>Checking your link…</p>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import {
+  getAuth,
+  applyActionCode,
+  checkActionCode,
+  confirmPasswordReset,
+  verifyPasswordResetCode,
+} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+
+/*
+ * Standalone landing page for Firebase's account-management email links
+ * (verify address, reset password, recover email), hosted at
+ * https://owenis.me/auth/action and set as the custom action URL in the
+ * Firebase console (Authentication -> Templates -> pencil -> "Customize
+ * action URL").
+ *
+ * Firebase appends ?mode=<action>&oobCode=<code>&continueUrl=<url>. All three
+ * action modes are handled here so one URL is safe for every template.
+ *
+ * This is a different origin from the Scribble app itself, so there is no
+ * signed-in session to refresh here — the oobCode is all any of these calls
+ * need, and the app picks the change up on its next token refresh.
+ */
+
+const firebaseApp = initializeApp({
+  apiKey: "AIzaSyBydJIC0fsocxmei-HBI6IH0ZlF-pwOcqg",
+  authDomain: "rypotic-playground.firebaseapp.com",
+  projectId: "rypotic-playground",
+  appId: "1:398595831490:web:191875e0da44ad3cfa2d5b",
+});
+const auth = getAuth(firebaseApp);
+
+const params = new URLSearchParams(location.search);
+const MODE = params.get("mode");
+const OOB = params.get("oobCode") || "";
+
+const APP_URL = "https://scribbleai.dev/";
+
+/*
+ * `continueUrl` arrives in the query string, so it is attacker-controllable
+ * even though Firebase validated it when the email was sent — anyone can hand
+ * out a link to this page with a continueUrl of their choosing. Rendering it
+ * unchecked would turn this page into an open redirect on a domain users have
+ * just been told to trust, so only our own hosts are honoured.
+ */
+const ALLOWED_HOSTS = new Set([
+  "scribbleai.dev",
+  "www.scribbleai.dev",
+  "owenis.me",
+  "www.owenis.me",
+  "localhost",
+]);
+
+function appHref() {
+  const raw = params.get("continueUrl");
+  if (!raw) return APP_URL;
+  try {
+    const url = new URL(raw, APP_URL);
+    if (url.protocol !== "https:" && url.hostname !== "localhost") return APP_URL;
+    return ALLOWED_HOSTS.has(url.hostname) ? url.href : APP_URL;
+  } catch {
+    return APP_URL;
+  }
+}
+
+const view = document.getElementById("view");
+const esc = (s) =>
+  String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const ICON = {
+  mail: '<svg class="icon ok" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><path d="m16 19 2 2 4-4"/></svg>',
+  check: '<svg class="icon ok" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
+  x: '<svg class="icon bad" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>',
+};
+
+function button(label) {
+  return '<a class="btn" href="' + esc(appHref()) + '">' + esc(label) + "</a>";
+}
+
+function render(icon, title, body, label) {
+  view.innerHTML = icon + "<h1>" + esc(title) + "</h1><p>" + esc(body) + "</p>" + button(label);
+}
+
+const fail = (title, body) => render(ICON.x, title, body, "Back to Scribble");
+
+const EXPIRED = [
+  "This link has expired",
+  "It may have already been used, or it simply timed out. Request a fresh email from Scribble and open the newest one.",
+];
+
+async function run() {
+  if (!MODE || !OOB) {
+    fail("Broken link", "This link is missing information. Request a new email from Scribble and open the newest one.");
+    return;
+  }
+  try {
+    if (MODE === "verifyEmail" || MODE === "verifyAndChangeEmail") {
+      await applyActionCode(auth, OOB);
+      render(
+        ICON.mail,
+        "You've been verified",
+        "Your email address is confirmed. Head back to Scribble — if it's already open in another tab, reload it to pick up the change.",
+        "Continue to Scribble",
+      );
+    } else if (MODE === "recoverEmail") {
+      const info = await checkActionCode(auth, OOB);
+      await applyActionCode(auth, OOB);
+      render(
+        ICON.check,
+        "Email restored",
+        "Your account email was changed back to " +
+          (info.data.email || "its previous address") +
+          ". If you didn't expect this, reset your password now.",
+        "Continue to Scribble",
+      );
+    } else if (MODE === "resetPassword") {
+      const email = await verifyPasswordResetCode(auth, OOB);
+      resetForm(email);
+    } else {
+      fail("Unsupported link", "Scribble doesn't handle this kind of link.");
+    }
+  } catch {
+    fail(EXPIRED[0], EXPIRED[1]);
+  }
+}
+
+function resetForm(email) {
+  view.innerHTML =
+    '<h1>Choose a new password</h1>' +
+    '<p class="sub">for ' + esc(email) + "</p>" +
+    '<form id="f" novalidate>' +
+    '<div class="field">' +
+    '<input id="pw" type="password" autocomplete="new-password" placeholder="New password" />' +
+    '<button class="peek" id="peek" type="button" aria-label="Show password">' +
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>' +
+    "</button></div>" +
+    '<input id="pw2" type="password" autocomplete="new-password" placeholder="Confirm new password" />' +
+    '<p class="err" id="err" hidden></p>' +
+    '<button class="submit" id="go" type="submit">Set new password</button>' +
+    "</form>";
+
+  const form = document.getElementById("f");
+  const pw = document.getElementById("pw");
+  const pw2 = document.getElementById("pw2");
+  const err = document.getElementById("err");
+  const go = document.getElementById("go");
+  const peek = document.getElementById("peek");
+
+  const clear = () => { err.hidden = true; };
+  pw.addEventListener("input", clear);
+  pw2.addEventListener("input", clear);
+
+  peek.addEventListener("click", () => {
+    const shown = pw.type === "text";
+    pw.type = pw2.type = shown ? "password" : "text";
+    peek.setAttribute("aria-label", shown ? "Show password" : "Hide password");
+  });
+
+  const show = (msg) => { err.textContent = msg; err.hidden = false; };
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clear();
+    if (pw.value.length < 6) return show("Use at least 6 characters.");
+    if (pw.value !== pw2.value) return show("Those don't match.");
+    go.disabled = true;
+    try {
+      await confirmPasswordReset(auth, OOB, pw.value);
+      render(
+        ICON.check,
+        "Password changed",
+        "You can now sign in to Scribble with your new password.",
+        "Go to Scribble",
+      );
+    } catch {
+      show("Couldn't set the password — the link may have expired. Request a new one from Scribble.");
+      go.disabled = false;
+    }
+  });
+
+  pw.focus();
+}
+
+run();
+</script>
+
+</body>
+</html>
