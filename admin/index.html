@@ -165,7 +165,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 import { getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCDKOIPUhbB5ezjjv2oeDwHYba1kxPVljE",
@@ -176,11 +175,14 @@ const firebaseConfig = {
   appId: "1:975653574383:web:c22386758244673f93ad1a"
 };
 
-const app       = initializeApp(firebaseConfig);
-const auth      = getAuth(app);
-const db        = getFirestore(app);
-const functions = getFunctions(app);
-const provider  = new GoogleAuthProvider();
+// Filled in once the Cloudflare Worker is deployed — see worker/index.js.
+// Looks like https://owenis-me-admin.<your-subdomain>.workers.dev
+const WORKER_URL = "";
+
+const app      = initializeApp(firebaseConfig);
+const auth     = getAuth(app);
+const db       = getFirestore(app);
+const provider = new GoogleAuthProvider();
 
 const gate       = document.getElementById("gate");
 const board      = document.getElementById("board");
@@ -265,16 +267,41 @@ async function decide(cardEl, docSnap, decision) {
   const btns = cardEl.querySelectorAll(".decision-btn");
   const note = cardEl.querySelector(".card-note");
   btns.forEach((b) => (b.disabled = true));
+
+  if (!WORKER_URL) {
+    note.textContent = "Email drafting isn't set up yet — deploy the Cloudflare Worker first.";
+    btns.forEach((b) => (b.disabled = false));
+    return;
+  }
+
   note.textContent = "Drafting the email…";
+  const d = docSnap.data();
+
   try {
-    const callable = httpsCallable(functions, "generateRequestEmail");
-    const res = await callable({ requestId: docSnap.id, decision });
-    const { subject, body, to } = res.data;
+    const idToken = await auth.currentUser.getIdToken();
+    const res = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        idToken,
+        decision,
+        handle: d.handle,
+        projectId: d.projectId,
+        contactEmail: d.contactEmail
+      })
+    });
+    if (!res.ok) throw new Error("draft failed: " + res.status);
+    const { subject, body, to } = await res.json();
+
+    await updateDoc(doc(db, "requests", docSnap.id), {
+      status: decision === "approve" ? "approved" : "denied"
+    });
+
     showDraft(cardEl, subject, body, to);
     note.textContent = "";
   } catch (err) {
     console.error(err);
-    note.textContent = "Couldn't draft the email — the backend may not be deployed yet.";
+    note.textContent = "Couldn't draft the email. Try again.";
   } finally {
     btns.forEach((b) => (b.disabled = false));
   }
