@@ -19,6 +19,8 @@
     --mark:#e8c547;
     --warn:#d98b5f;
     --ok:#8fb996;
+    --deny:#d9705f;
+    --info:#7fb0c9;
     --rule:rgba(244,239,227,.14);
   }
 
@@ -85,7 +87,9 @@
     padding:.2em .55em;border:1px solid var(--rule);color:var(--muted);white-space:nowrap;
   }
   .badge-new{color:var(--warn);border-color:var(--warn)}
-  .badge-dns-added{color:var(--mark);border-color:var(--mark)}
+  .badge-approved{color:var(--mark);border-color:var(--mark)}
+  .badge-denied{color:var(--deny);border-color:var(--deny)}
+  .badge-dns-added{color:var(--info);border-color:var(--info)}
   .badge-done{color:var(--ok);border-color:var(--ok)}
 
   dl{display:grid;grid-template-columns:auto 1fr;gap:.35rem 1rem;margin:1rem 0 0;font-size:.92rem}
@@ -101,12 +105,32 @@
     white-space:pre-wrap;word-break:break-word;max-height:14rem;overflow:auto;
   }
 
-  .card-actions{margin-top:1.1rem;display:flex;align-items:center;gap:.6rem}
-  .card-actions label{font-size:.85rem;color:var(--muted);display:flex;align-items:center;gap:.5rem}
-  select{
-    background:var(--ink);color:var(--paper);border:1px solid var(--rule);
-    font-family:"JetBrains Mono",monospace;font-size:.85rem;padding:.4rem .5rem;
+  .card-actions{margin-top:1.1rem;display:flex;gap:.5rem;flex-wrap:wrap}
+  .decision-btn,.track-btn{
+    border:1px solid var(--rule);background:transparent;color:var(--paper);
+    font-family:"Instrument Sans",sans-serif;font-size:.82rem;
+    padding:.45rem .8rem;cursor:pointer;transition:background-color .15s ease,border-color .15s ease;
   }
+  .decision-btn.approve{border-color:var(--ok);color:var(--ok)}
+  .decision-btn.deny{border-color:var(--deny);color:var(--deny)}
+  .decision-btn:hover,.track-btn:hover{background:var(--ink-raise)}
+  .decision-btn:disabled,.track-btn:disabled{opacity:.5;cursor:not-allowed}
+
+  .card-note{margin:.5rem 0 0;font-size:.82rem;color:var(--muted);min-height:1.2em}
+
+  .draft{margin-top:1.1rem;padding:1rem;border:1px solid var(--mark);background:var(--ink-raise);display:grid;gap:.75rem}
+  .draft label{display:grid;gap:.35rem;font-size:.82rem;color:var(--muted)}
+  .draft input,.draft textarea{
+    background:var(--ink-deep);border:1px solid var(--rule);color:var(--paper);
+    font-family:"JetBrains Mono",monospace;font-size:.85rem;padding:.5rem .6rem;resize:vertical;
+  }
+  .draft-actions{display:flex;gap:.6rem;flex-wrap:wrap}
+  .mailbtn{
+    display:inline-block;background:var(--mark);color:var(--ink);text-decoration:none;
+    padding:.5rem .9rem;font-size:.85rem;font-family:"Instrument Sans",sans-serif;font-weight:500;
+  }
+  .copybtn{border:1px solid var(--rule);background:transparent;color:var(--paper);padding:.5rem .9rem;font-size:.85rem;cursor:pointer}
+  .draft-note{margin:0;font-size:.75rem;color:var(--muted)}
 
   #gate{padding:3rem 0}
   #board[hidden],#gate[hidden]{display:none}
@@ -141,6 +165,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 import { getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCDKOIPUhbB5ezjjv2oeDwHYba1kxPVljE",
@@ -151,10 +176,11 @@ const firebaseConfig = {
   appId: "1:975653574383:web:c22386758244673f93ad1a"
 };
 
-const app      = initializeApp(firebaseConfig);
-const auth     = getAuth(app);
-const db       = getFirestore(app);
-const provider = new GoogleAuthProvider();
+const app       = initializeApp(firebaseConfig);
+const auth      = getAuth(app);
+const db        = getFirestore(app);
+const functions = getFunctions(app);
+const provider  = new GoogleAuthProvider();
 
 const gate       = document.getElementById("gate");
 const board      = document.getElementById("board");
@@ -186,6 +212,74 @@ function escapeHtml(str) {
   }[c]));
 }
 
+function showDraft(cardEl, subject, body, to) {
+  let panel = cardEl.querySelector(".draft");
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.className = "draft";
+    cardEl.appendChild(panel);
+  }
+  panel.innerHTML =
+    '<label>Subject<input type="text" class="draft-subject" value="' + escapeHtml(subject) + '"></label>' +
+    '<label>Body<textarea class="draft-body" rows="8">' + escapeHtml(body) + '</textarea></label>' +
+    '<div class="draft-actions">' +
+      '<a class="mailbtn" href="#">Open in email app</a>' +
+      '<button type="button" class="copybtn">Copy</button>' +
+    '</div>' +
+    '<p class="draft-note">Review before sending — this was written by AI.</p>';
+
+  const subjInput = panel.querySelector(".draft-subject");
+  const bodyInput = panel.querySelector(".draft-body");
+  const mailBtn   = panel.querySelector(".mailbtn");
+  const copyBtn   = panel.querySelector(".copybtn");
+
+  function syncMailto() {
+    mailBtn.href = "mailto:" + encodeURIComponent(to) +
+      "?subject=" + encodeURIComponent(subjInput.value) +
+      "&body=" + encodeURIComponent(bodyInput.value);
+  }
+  subjInput.addEventListener("input", syncMailto);
+  bodyInput.addEventListener("input", syncMailto);
+  syncMailto();
+
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText("Subject: " + subjInput.value + "\n\n" + bodyInput.value);
+      copyBtn.textContent = "Copied";
+      setTimeout(() => (copyBtn.textContent = "Copy"), 1500);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+}
+
+async function setStatus(docSnap, status) {
+  try {
+    await updateDoc(doc(db, "requests", docSnap.id), { status });
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function decide(cardEl, docSnap, decision) {
+  const btns = cardEl.querySelectorAll(".decision-btn");
+  const note = cardEl.querySelector(".card-note");
+  btns.forEach((b) => (b.disabled = true));
+  note.textContent = "Drafting the email…";
+  try {
+    const callable = httpsCallable(functions, "generateRequestEmail");
+    const res = await callable({ requestId: docSnap.id, decision });
+    const { subject, body, to } = res.data;
+    showDraft(cardEl, subject, body, to);
+    note.textContent = "";
+  } catch (err) {
+    console.error(err);
+    note.textContent = "Couldn't draft the email — the backend may not be deployed yet.";
+  } finally {
+    btns.forEach((b) => (b.disabled = false));
+  }
+}
+
 function renderCard(docSnap) {
   const d = docSnap.data();
   const el = document.createElement("article");
@@ -206,27 +300,17 @@ function renderCard(docSnap) {
     (d.note ? '<p class="note">' + escapeHtml(d.note) + '</p>' : '') +
     '<pre class="dns">' + escapeHtml(d.dnsRecords) + '</pre>' +
     '<div class="card-actions">' +
-      '<label>Status <select class="status-select">' +
-        '<option value="new">new</option>' +
-        '<option value="dns-added">dns-added</option>' +
-        '<option value="done">done</option>' +
-      '</select></label>' +
-    '</div>';
+      '<button type="button" class="decision-btn approve">Approve</button>' +
+      '<button type="button" class="decision-btn deny">Deny</button>' +
+      '<button type="button" class="track-btn dns">DNS added</button>' +
+      '<button type="button" class="track-btn done">Done</button>' +
+    '</div>' +
+    '<p class="card-note"></p>';
 
-  const select = el.querySelector(".status-select");
-  select.value = d.status || "new";
-  select.addEventListener("change", async () => {
-    const next = select.value;
-    select.disabled = true;
-    try {
-      await updateDoc(doc(db, "requests", docSnap.id), { status: next });
-    } catch (err) {
-      console.error(err);
-      select.value = d.status || "new";
-    } finally {
-      select.disabled = false;
-    }
-  });
+  el.querySelector(".approve").addEventListener("click", () => decide(el, docSnap, "approve"));
+  el.querySelector(".deny").addEventListener("click", () => decide(el, docSnap, "deny"));
+  el.querySelector(".dns").addEventListener("click", () => setStatus(docSnap, "dns-added"));
+  el.querySelector(".done").addEventListener("click", () => setStatus(docSnap, "done"));
 
   return el;
 }

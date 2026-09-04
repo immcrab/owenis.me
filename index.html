@@ -68,6 +68,7 @@
     font-size:1.15rem;letter-spacing:-.03em;text-decoration:none;
   }
   .wordmark .dot{color:var(--mark)}
+  .masthead-right{display:flex;align-items:center;gap:1.75rem;flex-wrap:wrap}
   .masthead nav{display:flex;gap:1.5rem;font-size:.95rem}
   .masthead nav a{
     color:var(--muted);text-decoration:none;padding-bottom:2px;
@@ -75,6 +76,22 @@
     transition:color .18s ease,border-color .18s ease;
   }
   .masthead nav a:hover{color:var(--paper);border-bottom-color:var(--mark)}
+
+  .authbox{display:flex;align-items:center;gap:.75rem;font-size:.85rem}
+  .authbtn{
+    border:1px solid var(--rule);background:transparent;color:var(--paper);
+    font-family:"Instrument Sans",sans-serif;font-size:.85rem;font-weight:500;
+    padding:.5rem .9rem;cursor:pointer;transition:border-color .18s ease,color .18s ease;
+  }
+  .authbtn:hover{border-color:var(--mark);color:var(--mark)}
+  .authbox .who{color:var(--muted);font-family:"JetBrains Mono",monospace;font-size:.78rem}
+  .authbox .admin-link{color:var(--mark);text-decoration:none;border-bottom:1px solid var(--mark);font-weight:500}
+  .authbox .signout{
+    border:1px solid var(--rule);background:transparent;color:var(--muted);
+    font-family:"Instrument Sans",sans-serif;font-size:.78rem;
+    padding:.4rem .7rem;cursor:pointer;
+  }
+  .authbox .signout:hover{color:var(--paper);border-color:var(--paper)}
 
   .hero{padding:4.5rem 0 5rem;border-top:1px solid var(--rule)}
   .hero h1{font-size:clamp(2.4rem,6.8vw,4.5rem);max-width:17ch}
@@ -217,11 +234,16 @@
 
   <header class="masthead">
     <a class="wordmark" href="/">Owenis<span class="dot">.</span>me</a>
-    <nav>
-      <a href="#scope">What changes</a>
-      <a href="#how">How it works</a>
-      <a href="#request">Request a name</a>
-    </nav>
+    <div class="masthead-right">
+      <nav>
+        <a href="#scope">What changes</a>
+        <a href="#how">How it works</a>
+        <a href="#request">Request a name</a>
+      </nav>
+      <div class="authbox" id="authbox">
+        <button type="button" id="signin" class="authbtn">Sign in with Google</button>
+      </div>
+    </div>
   </header>
 
   <main>
@@ -345,13 +367,9 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, limit, getDocs } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
-/* ---------------------------------------------------------------
-   Firebase console > Project settings > General > Your apps > Web app.
-   These values are meant to be public; security comes from the rules
-   in firestore.rules, not from hiding this.
-   --------------------------------------------------------------- */
 const firebaseConfig = {
   apiKey: "AIzaSyCDKOIPUhbB5ezjjv2oeDwHYba1kxPVljE",
   authDomain: "owenisme-2e155.firebaseapp.com",
@@ -361,15 +379,18 @@ const firebaseConfig = {
   appId: "1:975653574383:web:c22386758244673f93ad1a"
 };
 
-const form   = document.getElementById("request-form");
-const status = document.getElementById("status");
-const submit = document.getElementById("submit");
-const handle = document.getElementById("handle");
+const form    = document.getElementById("request-form");
+const status  = document.getElementById("status");
+const submit  = document.getElementById("submit");
+const handle  = document.getElementById("handle");
+const authbox = document.getElementById("authbox");
 
-let db = null;
+let app = null, db = null, auth = null;
 if (firebaseConfig.projectId) {
   try {
-    db = getFirestore(initializeApp(firebaseConfig));
+    app  = initializeApp(firebaseConfig);
+    db   = getFirestore(app);
+    auth = getAuth(app);
   } catch (err) {
     console.error("Firebase init failed", err);
   }
@@ -430,6 +451,53 @@ form.addEventListener("submit", async (e) => {
     fail("That didn't send. Try again, or email support@scribbleai.dev with the same details.");
   }
 });
+
+/* sign-in and admin entry point */
+function escapeHtmlLite(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+if (auth) {
+  const provider = new GoogleAuthProvider();
+
+  authbox.addEventListener("click", async (e) => {
+    if (e.target.id === "signin") {
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    if (e.target.id === "signout") {
+      await signOut(auth);
+    }
+  });
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      authbox.innerHTML = '<button type="button" id="signin" class="authbtn">Sign in with Google</button>';
+      return;
+    }
+
+    authbox.innerHTML =
+      '<span class="who">' + escapeHtmlLite(user.email) + '</span>' +
+      '<button type="button" id="signout" class="signout">Sign out</button>';
+
+    if (db) {
+      try {
+        await getDocs(query(collection(db, "requests"), limit(1)));
+        authbox.innerHTML =
+          '<a class="admin-link" href="/admin/">Open admin →</a>' +
+          '<span class="who">' + escapeHtmlLite(user.email) + '</span>' +
+          '<button type="button" id="signout" class="signout">Sign out</button>';
+      } catch (err) {
+        /* signed in, but not an admin — leave the plain signed-in view */
+      }
+    }
+  });
+}
 
 /* hero type-and-strike sequence */
 (function () {
