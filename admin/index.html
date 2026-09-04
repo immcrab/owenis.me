@@ -175,9 +175,9 @@ const firebaseConfig = {
   appId: "1:975653574383:web:c22386758244673f93ad1a"
 };
 
-// Filled in once the Cloudflare Worker is deployed — see worker/index.js.
-// Looks like https://owenis-me-admin.<your-subdomain>.workers.dev
-const WORKER_URL = "";
+// Called directly from the browser. Anyone who loads this page can read
+// this key out of the page source — paste your Groq key here yourself.
+const GROQ_API_KEY = "";
 
 const app      = initializeApp(firebaseConfig);
 const auth     = getAuth(app);
@@ -268,36 +268,50 @@ async function decide(cardEl, docSnap, decision) {
   const note = cardEl.querySelector(".card-note");
   btns.forEach((b) => (b.disabled = true));
 
-  if (!WORKER_URL) {
-    note.textContent = "Email drafting isn't set up yet — deploy the Cloudflare Worker first.";
+  if (!GROQ_API_KEY) {
+    note.textContent = "Email drafting isn't set up yet — add your Groq key near the top of this file.";
     btns.forEach((b) => (b.disabled = false));
     return;
   }
 
   note.textContent = "Drafting the email…";
+
   const d = docSnap.data();
+  const prompt = decision === "approve"
+    ? `Write a short, friendly email telling a developer their custom sender-domain request for Firebase auth emails has been approved and is now live.\nTheir chosen address: ${d.handle}@owenis.me\nTheir Firebase project ID: ${d.projectId}\nTell them to go back to the Firebase console (Authentication > Templates > pencil icon > customize domain) and click "Verify" to finish switching over. Sign off as the Owenis.me team. Keep it under 120 words. Output only the email body, no subject line, no placeholders in brackets.`
+    : `Write a short, kind email telling a developer their custom sender-domain request for Firebase auth emails could not be approved as submitted.\nTheir chosen address: ${d.handle}@owenis.me\nTheir Firebase project ID: ${d.projectId}\nAsk them to double check the DNS records they pasted (from Firebase console > Authentication > Templates > customize domain) are complete and try again, or reply with questions. Sign off as the Owenis.me team. Keep it under 120 words. Output only the email body, no subject line, no placeholders in brackets.`;
 
   try {
-    const idToken = await auth.currentUser.getIdToken();
-    const res = await fetch(WORKER_URL, {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + GROQ_API_KEY
+      },
       body: JSON.stringify({
-        idToken,
-        decision,
-        handle: d.handle,
-        projectId: d.projectId,
-        contactEmail: d.contactEmail
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          { role: "system", content: "You write short, warm, plain-text support emails. No markdown, no placeholders in brackets." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.5,
+        max_tokens: 400
       })
     });
     if (!res.ok) throw new Error("draft failed: " + res.status);
-    const { subject, body, to } = await res.json();
+    const json = await res.json();
+    const body = json.choices?.[0]?.message?.content?.trim();
+    if (!body) throw new Error("empty draft");
+
+    const subject = decision === "approve"
+      ? d.handle + "@owenis.me is ready to verify"
+      : "About your owenis.me request";
 
     await updateDoc(doc(db, "requests", docSnap.id), {
       status: decision === "approve" ? "approved" : "denied"
     });
 
-    showDraft(cardEl, subject, body, to);
+    showDraft(cardEl, subject, body, d.contactEmail);
     note.textContent = "";
   } catch (err) {
     console.error(err);
