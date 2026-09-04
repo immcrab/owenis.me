@@ -13,8 +13,7 @@ service cloud.firestore {
       return request.auth != null
         && request.auth.token.email_verified == true
         && request.auth.token.email in [
-             // Replace with the Google account(s) that should see requests.
-             'REPLACE_WITH_YOUR_EMAIL@gmail.com'
+             'imcrabfr@gmail.com'
            ];
     }
 
