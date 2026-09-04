@@ -1,6 +1,6 @@
 import { auth } from "@/lib/firebase";
 
-const WORKER_URL = import.meta.env.VITE_WORKER_URL || "http://127.0.0.1:8787";
+const WORKER_URL = import.meta.env.VITE_WORKER_URL?.trim() || "http://127.0.0.1:8787";
 
 export class WorkerError extends Error {}
 

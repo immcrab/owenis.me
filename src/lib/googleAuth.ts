@@ -1,6 +1,6 @@
 const IDENTITY_TOOLKIT_SCOPE = "https://www.googleapis.com/auth/identitytoolkit";
 
-export const googleOAuthConfigured = Boolean(import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID);
+export const googleOAuthConfigured = Boolean(import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID?.trim());
 
 /**
  * Requests a short-lived Google OAuth access token, scoped to the Identity
@@ -17,7 +17,7 @@ export function requestIdentityToolkitToken(): Promise<string> {
       reject(new Error("Google sign-in hasn't finished loading yet. Try again in a moment."));
       return;
     }
-    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID?.trim();
     if (!clientId) {
       reject(new Error("Google OAuth isn't configured for this deployment."));
       return;
