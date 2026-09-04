@@ -344,41 +344,42 @@
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /* ---------------------------------------------------------------
-   PASTE YOUR FIREBASE WEB CONFIG HERE.
-   Firebase console > Project settings > General > Your apps > Web app.
-   These values are meant to be public; security comes from the rules
-   in firestore.rules, not from hiding this.
+   PASTE YOUR SUPABASE PROJECT DETAILS HERE.
+   Dashboard > Project Settings > API.
+   The anon key is meant to be public — the row level security
+   policies in schema.sql are what keep the table safe.
    --------------------------------------------------------------- */
-const firebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
-};
+const SUPABASE_URL      = "";
+const SUPABASE_ANON_KEY = "";
 
 const form   = document.getElementById("request-form");
 const status = document.getElementById("status");
 const submit = document.getElementById("submit");
 const handle = document.getElementById("handle");
 
-let db = null;
-if (firebaseConfig.projectId) {
+let supabase = null;
+if (SUPABASE_URL && SUPABASE_ANON_KEY) {
   try {
-    db = getFirestore(initializeApp(firebaseConfig));
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   } catch (err) {
-    console.error("Firebase init failed", err);
+    console.error("Supabase init failed", err);
   }
 }
 
-if (!db) {
+if (!supabase) {
   submit.disabled = true;
   status.textContent = "Requests aren't open yet — email support@scribbleai.dev and we'll set you up by hand.";
+}
+
+/* short, human-readable reference the submitter can quote back at us */
+function makeReference() {
+  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
 }
 
 handle.addEventListener("input", () => {
@@ -394,42 +395,41 @@ function fail(msg, el) {
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (!db) return;
+  if (!supabase) return;
 
-  const payload = {
-    handle:       handle.value.trim().replace(/-$/, ""),
-    projectId:    document.getElementById("projectId").value.trim(),
-    contactEmail: document.getElementById("contactEmail").value.trim(),
-    dnsRecords:   document.getElementById("dnsRecords").value.trim(),
-    note:         document.getElementById("note").value.trim()
+  const row = {
+    reference:     makeReference(),
+    handle:        handle.value.trim().replace(/-$/, ""),
+    project_id:    document.getElementById("projectId").value.trim(),
+    contact_email: document.getElementById("contactEmail").value.trim(),
+    dns_records:   document.getElementById("dnsRecords").value.trim(),
+    note:          document.getElementById("note").value.trim(),
+    user_agent:    navigator.userAgent.slice(0, 300)
   };
 
-  if (!payload.handle)       return fail("Pick a name to go in front of the @.", handle);
-  if (!payload.projectId)    return fail("We need the project ID to match the records to your project.", document.getElementById("projectId"));
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(payload.contactEmail))
-                             return fail("That email address doesn't look complete.", document.getElementById("contactEmail"));
-  if (payload.dnsRecords.length < 20)
-                             return fail("Paste the records Firebase showed you — there should be several lines.", document.getElementById("dnsRecords"));
+  if (!row.handle)    return fail("Pick a name to go in front of the @.", handle);
+  if (!row.project_id) return fail("We need the project ID to match the records to your project.", document.getElementById("projectId"));
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(row.contact_email))
+                      return fail("That email address doesn't look complete.", document.getElementById("contactEmail"));
+  if (row.dns_records.length < 20)
+                      return fail("Paste the records Firebase showed you — there should be several lines.", document.getElementById("dnsRecords"));
 
   submit.disabled = true;
   status.className = "status";
   status.textContent = "Sending…";
 
-  try {
-    const ref = await addDoc(collection(db, "requests"), {
-      ...payload,
-      status: "new",
-      userAgent: navigator.userAgent.slice(0, 300),
-      createdAt: serverTimestamp()
-    });
-    form.reset();
-    status.className = "status ok";
-    status.innerHTML = 'Got it. Your reference is <span class="ref">' + ref.id.slice(0, 8) + '</span> — quote it if you email us.';
-  } catch (err) {
-    console.error(err);
+  const { error } = await supabase.from("requests").insert(row);
+
+  if (error) {
+    console.error(error);
     submit.disabled = false;
     fail("That didn't send. Try again, or email support@scribbleai.dev with the same details.");
+    return;
   }
+
+  form.reset();
+  status.className = "status ok";
+  status.innerHTML = 'Got it. Your reference is <span class="ref">' + row.reference + '</span> — quote it if you email us.';
 });
 
 /* hero type-and-strike sequence */
