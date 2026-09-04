@@ -1,0 +1,47 @@
+rules_version = '2';
+
+// Deploy with:  firebase deploy --only firestore:rules
+//
+// The site writes one document per request and never reads them back.
+// Reads, updates and deletes are closed to every client; use the Firebase
+// console or the Admin SDK to work through the queue.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /requests/{requestId} {
+      allow read, update, delete: if false;
+
+      allow create: if
+        request.resource.data.keys().hasOnly([
+          'handle', 'projectId', 'contactEmail', 'dnsRecords',
+          'note', 'status', 'userAgent', 'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'handle', 'projectId', 'contactEmail', 'dnsRecords',
+          'note', 'status', 'createdAt'
+        ])
+        && request.resource.data.handle is string
+        && request.resource.data.handle.size() > 0
+        && request.resource.data.handle.size() <= 32
+        && request.resource.data.handle.matches('^[a-z0-9]([a-z0-9-]*[a-z0-9])?$')
+        && request.resource.data.projectId is string
+        && request.resource.data.projectId.size() > 0
+        && request.resource.data.projectId.size() <= 120
+        && request.resource.data.contactEmail is string
+        && request.resource.data.contactEmail.size() <= 200
+        && request.resource.data.contactEmail.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && request.resource.data.dnsRecords is string
+        && request.resource.data.dnsRecords.size() >= 20
+        && request.resource.data.dnsRecords.size() <= 5000
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 1000
+        && request.resource.data.status == 'new'
+        && request.resource.data.createdAt == request.time;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
