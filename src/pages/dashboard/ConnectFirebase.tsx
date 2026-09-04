@@ -1,4 +1,4 @@
-import { httpsCallable } from "firebase/functions";
+import { collection, doc, getDocs, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
 import { AlertTriangle, Cloud, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -8,12 +8,15 @@ import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageSpinner } from "@/components/ui/Spinner";
 import { ProjectStatusBadge } from "@/components/StatusBadge";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useUserProject } from "@/hooks/useUserProject";
-import { functions } from "@/lib/firebase";
+import { logActivity } from "@/lib/activityLog";
+import { db } from "@/lib/firebase";
 import { connectProjectSchema } from "@/lib/validators";
 
 export default function ConnectFirebase() {
+  const { user } = useAuth();
   const { project, loading } = useUserProject();
   const { push } = useToast();
 
@@ -64,10 +67,30 @@ export default function ConnectFirebase() {
       return;
     }
 
+    if (!user) return;
     setSubmitting(true);
     try {
-      const fn = httpsCallable(functions, "connectProject");
-      await fn(parsed.data);
+      const ref = doc(db, "projects", user.uid);
+      await setDoc(
+        ref,
+        {
+          id: user.uid,
+          ownerId: user.uid,
+          firebaseProjectId: parsed.data.firebaseProjectId,
+          displayName: parsed.data.displayName,
+          webApiKey: parsed.data.webApiKey || null,
+          authDomain: parsed.data.authDomain || null,
+          status: "connected",
+          publicListing: project?.publicListing ?? false,
+          publicDescription: project?.publicDescription ?? null,
+          actionUrls: project?.actionUrls ?? { continueUrl: "", customDomain: null },
+          dnsRecords: project?.dnsRecords ?? [],
+          createdAt: project?.createdAt ?? serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      logActivity(project ? "project_updated" : "project_connected", { firebaseProjectId: parsed.data.firebaseProjectId });
       push({
         kind: "success",
         title: project ? "Project updated" : "Project connected",
@@ -85,10 +108,17 @@ export default function ConnectFirebase() {
   }
 
   async function handleDisconnect() {
+    if (!user) return;
     setDisconnecting(true);
     try {
-      const fn = httpsCallable(functions, "disconnectProject");
-      await fn();
+      const templatesSnap = await getDocs(collection(db, "projects", user.uid, "emailTemplates"));
+      const batch = writeBatch(db);
+      templatesSnap.forEach((d) => batch.delete(d.ref));
+      batch.delete(doc(db, "projects", user.uid));
+      batch.delete(doc(db, "publicProjects", user.uid));
+      await batch.commit();
+
+      logActivity("project_disconnected");
       push({ kind: "success", title: "Project disconnected" });
       setConfirmDisconnect(false);
       setFirebaseProjectId("");

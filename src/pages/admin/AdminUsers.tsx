@@ -1,4 +1,4 @@
-import { httpsCallable } from "firebase/functions";
+import { doc, updateDoc } from "firebase/firestore";
 import { Search, ShieldOff, UserCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
@@ -10,7 +10,8 @@ import { PageSpinner } from "@/components/ui/Spinner";
 import { Table, Td, Th, Thead, Tr } from "@/components/ui/Table";
 import { useToast } from "@/context/ToastContext";
 import { useAllUsers } from "@/hooks/useAdminData";
-import { functions } from "@/lib/firebase";
+import { logActivity } from "@/lib/activityLog";
+import { db } from "@/lib/firebase";
 import { formatDate, initials } from "@/lib/utils";
 
 export default function AdminUsers() {
@@ -28,8 +29,11 @@ export default function AdminUsers() {
   async function toggleDisabled(uid: string, disabled: boolean) {
     setPendingUid(uid);
     try {
-      const fn = httpsCallable(functions, "setUserDisabled");
-      await fn({ uid, disabled: !disabled });
+      // App-level disable only: without a paid Cloud Functions backend there's
+      // no way to suspend the underlying Firebase Auth account. This blocks
+      // their writes (via firestore.rules) and signs them out on next load.
+      await updateDoc(doc(db, "users", uid), { disabled: !disabled });
+      logActivity(!disabled ? "user_disabled" : "user_enabled", { uid });
       push({ kind: "success", title: !disabled ? "User disabled" : "User re-enabled" });
     } catch (err) {
       push({ kind: "error", title: "Action failed", description: err instanceof Error ? err.message : undefined });

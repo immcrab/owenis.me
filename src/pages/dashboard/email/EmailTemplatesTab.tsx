@@ -1,4 +1,4 @@
-import { httpsCallable } from "firebase/functions";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { Eye, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -7,10 +7,12 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { Tabs } from "@/components/ui/Tabs";
 import { Textarea } from "@/components/ui/Textarea";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useEmailTemplates } from "@/hooks/useEmailTemplates";
+import { logActivity } from "@/lib/activityLog";
 import { EMAIL_TEMPLATE_HELP, TEMPLATE_VARIABLES } from "@/lib/constants";
-import { functions } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { EMAIL_TEMPLATE_LABELS, type EmailTemplateType, type FirebaseProjectDoc } from "@/lib/types";
 import { emailTemplateSchema } from "@/lib/validators";
 
@@ -36,6 +38,7 @@ const DEFAULTS: Record<EmailTemplateType, { subject: string; bodyHtml: string }>
 };
 
 export function EmailTemplatesTab({ project }: { project: FirebaseProjectDoc | null }) {
+  const { user } = useAuth();
   const { push } = useToast();
   const { templates, loading } = useEmailTemplates();
   const [activeType, setActiveType] = useState<EmailTemplateType>("verify_email");
@@ -73,10 +76,21 @@ export function EmailTemplatesTab({ project }: { project: FirebaseProjectDoc | n
       setErrors(fieldErrors);
       return;
     }
+    if (!user) return;
     setSaving(true);
     try {
-      const fn = httpsCallable(functions, "saveEmailTemplate");
-      await fn({ templateType: activeType, ...parsed.data });
+      await setDoc(
+        doc(db, "projects", user.uid, "emailTemplates", activeType),
+        {
+          id: activeType,
+          projectId: user.uid,
+          ...parsed.data,
+          replyTo: parsed.data.replyTo || null,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      logActivity("email_template_saved", { templateType: activeType });
       push({ kind: "success", title: "Template saved", description: EMAIL_TEMPLATE_LABELS[activeType] });
     } catch (err) {
       push({ kind: "error", title: "Couldn't save template", description: err instanceof Error ? err.message : undefined });

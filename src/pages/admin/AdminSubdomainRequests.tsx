@@ -1,4 +1,4 @@
-import { httpsCallable } from "firebase/functions";
+import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { Check, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { SubdomainStatusBadge } from "@/components/StatusBadge";
@@ -11,10 +11,12 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { PageSpinner } from "@/components/ui/Spinner";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useAllSubdomainRequests } from "@/hooks/useAdminData";
+import { logActivity } from "@/lib/activityLog";
 import { PLATFORM_DOMAIN } from "@/lib/constants";
-import { functions } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import type { SubdomainRequestDoc, SubdomainStatus } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 
@@ -94,6 +96,7 @@ function ReviewModal({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const { user } = useAuth();
   const { push } = useToast();
   const [subdomain, setSubdomain] = useState(request.requestedSubdomain);
   const [message, setMessage] = useState(request.adminMessage ?? "");
@@ -102,13 +105,14 @@ function ReviewModal({
   async function review(status: SubdomainStatus) {
     setSubmitting(status);
     try {
-      const fn = httpsCallable(functions, "reviewSubdomainRequest");
-      await fn({
-        requestId: request.id,
+      await updateDoc(doc(db, "subdomainRequests", request.id), {
         status,
         adminMessage: message.trim() || null,
-        requestedSubdomain: subdomain !== request.requestedSubdomain ? subdomain : undefined,
+        requestedSubdomain: subdomain,
+        reviewedBy: user?.uid ?? null,
+        updatedAt: serverTimestamp(),
       });
+      logActivity("subdomain_request_reviewed", { requestId: request.id, status });
       onDone();
     } catch (err) {
       push({ kind: "error", title: "Couldn't update request", description: err instanceof Error ? err.message : undefined });

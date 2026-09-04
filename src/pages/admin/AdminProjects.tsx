@@ -1,4 +1,14 @@
-import { httpsCallable } from "firebase/functions";
+import {
+  collection,
+  doc,
+  deleteDoc,
+  getDocs,
+  limit as fbLimit,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from "firebase/firestore";
 import { Globe, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ProjectStatusBadge } from "@/components/StatusBadge";
@@ -13,7 +23,8 @@ import { PageSpinner } from "@/components/ui/Spinner";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/context/ToastContext";
 import { useAllProjects } from "@/hooks/useAdminData";
-import { functions } from "@/lib/firebase";
+import { logActivity } from "@/lib/activityLog";
+import { db } from "@/lib/firebase";
 import type { FirebaseProjectDoc } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
@@ -82,8 +93,38 @@ function ProjectModal({ project, onClose }: { project: FirebaseProjectDoc; onClo
   async function handleSave() {
     setSaving(true);
     try {
-      const fn = httpsCallable(functions, "setProjectPublicListing");
-      await fn({ uid: project.ownerId, publicListing, publicDescription: description.trim() });
+      const uid = project.ownerId;
+      const trimmedDescription = description.trim();
+
+      await setDoc(
+        doc(db, "projects", uid),
+        { publicListing, publicDescription: trimmedDescription || null, updatedAt: serverTimestamp() },
+        { merge: true },
+      );
+
+      if (publicListing) {
+        const approvedRequest = await getDocs(
+          query(
+            collection(db, "subdomainRequests"),
+            where("userId", "==", uid),
+            where("status", "==", "approved"),
+            fbLimit(1),
+          ),
+        );
+        const subdomain = approvedRequest.empty ? null : approvedRequest.docs[0]!.data().requestedSubdomain;
+
+        await setDoc(doc(db, "publicProjects", uid), {
+          id: uid,
+          displayName: project.displayName,
+          subdomain,
+          description: trimmedDescription,
+          joinedAt: project.createdAt ?? serverTimestamp(),
+        });
+      } else {
+        await deleteDoc(doc(db, "publicProjects", uid));
+      }
+
+      logActivity(publicListing ? "project_listed_publicly" : "project_unlisted", { uid });
       push({ kind: "success", title: "Listing updated" });
       onClose();
     } catch (err) {

@@ -1,16 +1,17 @@
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   type User,
+  EmailAuthProvider,
   onAuthStateChanged,
-  onIdTokenChanged,
+  reauthenticateWithCredential,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
 } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
+import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import {
   createContext,
   type ReactNode,
@@ -18,7 +19,9 @@ import {
   useEffect,
   useState,
 } from "react";
-import { auth, db, firebaseConfigured, functions } from "@/lib/firebase";
+import { logActivity } from "@/lib/activityLog";
+import { auth, db, firebaseConfigured } from "@/lib/firebase";
+import { ADMIN_EMAIL } from "@/lib/constants";
 import type { UserDoc } from "@/lib/types";
 
 interface AuthContextValue {
@@ -32,6 +35,7 @@ interface AuthContextValue {
   signOutUser: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   resendVerification: () => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -39,9 +43,9 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userDoc, setUserDoc] = useState<UserDoc | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [docLoading, setDocLoading] = useState(true);
+  const [disabledNotice, setDisabledNotice] = useState(false);
 
   useEffect(() => {
     if (!firebaseConfigured) {
@@ -59,19 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    const unsubToken = onIdTokenChanged(auth, async (u) => {
-      if (!u) {
-        setIsAdmin(false);
-        return;
-      }
-      const result = await u.getIdTokenResult();
-      setIsAdmin(result.claims.admin === true);
-    });
-
-    return () => {
-      unsubAuth();
-      unsubToken();
-    };
+    return () => unsubAuth();
   }, []);
 
   useEffect(() => {
@@ -79,36 +71,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setDocLoading(true);
     const ref = doc(db, "users", user.uid);
     const unsub = onSnapshot(ref, (snap) => {
-      setUserDoc(snap.exists() ? (snap.data() as UserDoc) : null);
+      const data = snap.exists() ? (snap.data() as UserDoc) : null;
+      setUserDoc(data);
       setDocLoading(false);
+
+      // Admin "disable" is enforced at the app level (Firestore rules block
+      // this user's writes once disabled:true, and we sign them out here) —
+      // there's no Cloud Functions backend to do a real Firebase Auth
+      // account suspension without a paid Blaze plan.
+      if (data?.disabled) {
+        setDisabledNotice(true);
+        signOut(auth);
+      }
     });
     return () => unsub();
   }, [user]);
 
+  // isAdmin here is a UI convenience only. The real security boundary is
+  // Firestore rules checking request.auth.token server-side — this client
+  // value can never grant access to anything by itself. It mirrors the
+  // rules' email_verified requirement too, so an admin who hasn't verified
+  // yet gets routed to a clear message instead of a silently-broken panel
+  // (every read/write would be denied server-side regardless).
+  const isAdmin = Boolean(user?.email && user.email === ADMIN_EMAIL && user.emailVerified);
+
   async function signUp(email: string, password: string, displayName: string) {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    if (displayName.trim()) {
-      await updateProfile(cred.user, { displayName: displayName.trim() });
-      try {
-        await httpsCallable(functions, "syncProfile")({ displayName: displayName.trim() });
-      } catch {
-        // Non-fatal — the Firestore doc will just show a blank name until the
-        // user edits it from Account settings.
-      }
+    const trimmedName = displayName.trim();
+    if (trimmedName) {
+      await updateProfile(cred.user, { displayName: trimmedName });
     }
+    await setDoc(doc(db, "users", cred.user.uid), {
+      uid: cred.user.uid,
+      email: cred.user.email,
+      displayName: trimmedName || null,
+      createdAt: serverTimestamp(),
+      disabled: false,
+      isAdmin: email.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
+      aiCallsToday: 0,
+      aiCallsResetAt: null,
+    });
     await sendEmailVerification(cred.user);
-    // Best-effort: claim admin if this email is on the server allowlist.
-    // No-op (and silently ignored) for everyone else.
-    try {
-      const result = await httpsCallable<unknown, { granted: boolean }>(functions, "bootstrapAdmin")();
-      if (result.data.granted) {
-        // The ID token minted at sign-up predates the custom claim — force a
-        // refresh so isAdmin reflects it immediately instead of on next sign-in.
-        await cred.user.getIdToken(true);
-      }
-    } catch {
-      // Not on the allowlist, or functions not deployed yet — ignore.
-    }
+    logActivity("user_created");
   }
 
   async function signIn(email: string, password: string) {
@@ -129,6 +133,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function deleteAccount(password: string) {
+    if (!auth.currentUser?.email) throw new Error("Not signed in.");
+    // Deleting your own Firebase Auth account requires a recent sign-in;
+    // reauthenticate first so this works without a backend.
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+    await reauthenticateWithCredential(auth.currentUser, credential);
+    await deleteUser(auth.currentUser);
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -142,9 +155,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOutUser,
         resetPassword,
         resendVerification,
+        deleteAccount,
       }}
     >
       {children}
+      {disabledNotice && (
+        <div className="fixed inset-x-0 bottom-0 z-100 border-t border-[var(--color-danger-subtle)] bg-[var(--color-elevated)] px-4 py-3 text-center text-sm text-[var(--color-danger)]">
+          Your account has been disabled. Contact support if you think this is a mistake.
+        </div>
+      )}
     </AuthContext.Provider>
   );
 }

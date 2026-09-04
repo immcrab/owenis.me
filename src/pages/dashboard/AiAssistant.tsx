@@ -1,11 +1,10 @@
-import { httpsCallable } from "firebase/functions";
 import { motion } from "framer-motion";
 import { Bot, Send, ShieldCheck, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { functions } from "@/lib/firebase";
+import { askAssistant } from "@/lib/worker";
 import { cn } from "@/lib/utils";
 
 interface Message {
@@ -42,12 +41,8 @@ export default function AiAssistant() {
     setInput("");
     setLoading(true);
     try {
-      const fn = httpsCallable<unknown, { reply: string }>(functions, "aiAssistant");
-      const res = await fn({
-        message: text,
-        history: nextMessages.slice(-8),
-      });
-      setMessages((prev) => [...prev, { role: "assistant", content: res.data.reply }]);
+      const res = await askAssistant(text, nextMessages.slice(-8));
+      setMessages((prev) => [...prev, { role: "assistant", content: res.reply }]);
     } catch (err) {
       setMessages((prev) => [
         ...prev,

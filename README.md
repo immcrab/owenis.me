@@ -1,284 +1,295 @@
 # owenis.me — Firebase Email Management Platform
 
 A dashboard for connecting a Firebase project, configuring its Auth email
-templates and action URLs, verifying a custom sending domain, and requesting
-a free `*.owenis.me` subdomain — plus a Groq-powered AI email generator and
-a documentation-grounded AI assistant, and a full admin back office.
+templates and action URLs, verifying a custom sending domain, requesting a
+free `*.owenis.me` subdomain, and — for real — pushing authorized-domain
+changes straight into your live Firebase project. Plus a Groq-powered AI
+email generator and documentation-grounded AI assistant, and a full admin
+back office.
 
-This is a real, working application: authentication, database, security
-rules, and privileged operations are all implemented and enforced
-server-side. Nothing here is a mockup — see [What's genuinely real vs. what's
-intentionally limited](#whats-genuinely-real-vs-whats-intentionally-limited)
-for the honest boundaries of what a third-party platform can and can't do to
-someone else's Firebase project.
+**This runs entirely on free infrastructure: Firebase's Spark (free) plan,
+GitHub Pages, and a Cloudflare Worker (free tier).** No Cloud Functions, no
+Firebase Hosting, no paid plan of any kind. That constraint shaped the whole
+architecture — see [Why no backend / how privileged operations
+work](#why-no-backend--how-privileged-operations-work) below.
 
 ## Stack
 
 | Layer | Choice | Why |
 |---|---|---|
-| Frontend | React 19 + TypeScript + Vite | Fast dev loop, standard, no framework lock-in needed for a dashboard app |
+| Frontend | React 19 + TypeScript + Vite, `HashRouter` | Static export, deployable as plain files — `HashRouter` means GitHub Pages needs zero server-side rewrite config |
 | Styling | Tailwind CSS v4 | Design tokens as CSS variables (`src/index.css`), utility classes everywhere else |
-| Routing | React Router v7 | Client-side routing across public / dashboard / admin route trees |
-| Animation | Framer Motion | Page transitions, sidebar collapse, modals, toasts — all respect `prefers-reduced-motion` |
-| Auth + DB | Firebase Authentication + **Firestore** | See below |
-| Backend | Firebase Cloud Functions (2nd gen, Node 20, TypeScript) | The only place secrets and privileged writes live |
-| AI | Groq API (`groq-sdk`), called only from Cloud Functions | Key never touches the client |
+| Hosting | **GitHub Pages** (via GitHub Actions, `.github/workflows/deploy.yml`) | Free, and the repo already had a `CNAME` for `owenis.me` from before |
+| Auth + DB | Firebase Authentication + **Firestore**, Spark plan | Free tier, generous quota, client SDK only — no Admin SDK anywhere |
+| Privileged compute | **One Cloudflare Worker** (`worker/`) | The only place that holds the Groq API key — everything else runs from the browser |
+| Real Firebase project writes | Google Identity Toolkit Admin API, called directly from the browser with the user's own OAuth token | See below — this is genuinely live, not simulated |
+| AI | Groq API (`groq-sdk`), called only from the Worker | Key never touches the browser |
+
+## Why no backend / how privileged operations work
+
+Firebase Cloud Functions require the **Blaze** (pay-as-you-go) plan, even
+though Functions themselves have a free quota — Blaze just requires a
+billing account attached. This project stays on Spark, so there is no
+Firebase backend at all: no Admin SDK, no server-side validation, no custom
+claims. Every operation is either a **direct Firestore write from the
+browser** (governed entirely by `firestore.rules`) or a call to the **one
+Cloudflare Worker** for the one thing that genuinely needs a secret (Groq).
+
+Here's how each formerly-server-side piece actually works now:
+
+| Feature | How it works without a backend |
+|---|---|
+| Admin authorization | `firestore.rules` checks `request.auth.token.email` (and `email_verified`) directly — Firestore's own servers evaluate this, so it can't be forged from the client. No custom claims needed. |
+| Connect/update/disconnect project, save templates, action URLs, subdomain requests, admin reviews | Direct Firestore reads/writes from the browser, validated by `firestore.rules` (see below) |
+| Custom-domain DNS ownership verification | A real DNS TXT lookup via Google's public DNS-over-HTTPS JSON API (`dns.google/resolve`, CORS-enabled), called straight from the browser. It is never faked. |
+| AI email generator + AI assistant | Browser → Cloudflare Worker → Groq. The Worker verifies the caller's Firebase ID token (against Google's real public JWKS) before doing anything, and rate-limits per user via Cloudflare KV, so it can't be used as an open proxy. |
+| **Authorized domains** on the user's real Firebase project | Genuinely live. The user clicks "Connect Google," grants an OAuth scope (`identitytoolkit`) for *their own* Google account, and the browser calls Google's **Identity Toolkit Admin API v2** directly with that token to read/update `authorizedDomains` on their real project. No backend involved — it's the user's own delegated credential, same as running `gcloud` locally. |
+| Email template *content* | **Cannot** be pushed anywhere — Firebase has no public API for Auth email template content, full stop, regardless of plan or backend. The editor stores your draft and shows a live preview; you copy it into your Firebase console. This isn't a limitation of this build, it's a real gap in Firebase's product surface. |
+| Admin "disable user" | App-level only: sets `users/{uid}.disabled = true` in Firestore. `firestore.rules` then blocks that user's writes everywhere, and the client force-signs them out when it sees the flag. This is **not** a real Firebase Auth account suspension (that needs the Admin SDK) — it's the closest honest equivalent without one. |
+| Activity log | Self-reported: each client writes its own `activityLogs` entry right after a successful action, and `firestore.rules` only lets you write an entry with your *own* `userId`/`email`. It's a visibility aid for the admin, not a tamper-proof audit trail — without a server, nothing else is possible. |
+| Account deletion | Fully self-service: `deleteUser(auth.currentUser)` (Firebase client SDK supports deleting your *own* account), preceded by a password reauth prompt since Firebase requires a recent sign-in for this. |
 
 ### Why Firestore over Realtime Database
 
-Firestore was chosen (matching the brief's preference) because:
-
-- The data is naturally **document/collection shaped** (users, projects, one
-  project per user, subcollections for templates and drafts) rather than one
-  big JSON tree.
-- **Security rules** can express per-field and per-owner constraints
-  (`request.resource.data.diff(...)`, custom-claim checks) far more
-  precisely than RTDB's rule language.
-- Compound queries (`where("userId","==",uid).orderBy("createdAt","desc")`)
-  used throughout the dashboard and admin panel are first-class in Firestore.
-- RTDB's advantage — very low-latency realtime sync for high-frequency data
-  (e.g. presence, live cursors) — isn't needed here; the data changes at
-  human speed (a form save, an admin review).
-
-## What's genuinely real vs. what's intentionally limited
-
-The brief is explicit: don't invent that something works if it doesn't. Here's
-the honest breakdown.
-
-**Fully real, end-to-end:**
-- Firebase Authentication (sign up, sign in, sign out, password reset, email
-  verification) and Firestore reads/writes.
-- Admin authorization via **Firebase custom claims**, set only by Cloud
-  Functions using the Admin SDK — never trusted from the client, never
-  hardcoded as a frontend-only check. `/auth/action` is a real, working
-  handler for Firebase's `verifyEmail` and `resetPassword` action links.
-- Every write to `projects`, `emailTemplates`, `subdomainRequests`,
-  `activityLogs`, and `aiSettings` goes through an authenticated Cloud
-  Function that validates input (Zod) and enforces authorization —
-  Firestore rules additionally deny all direct client writes to those
-  collections as defense in depth.
-- Custom domain **ownership verification**: a real DNS TXT record is
-  generated per project, and "verified" only flips to `true` after a live
-  `dns.promises.resolveTxt()` lookup from the Cloud Function actually finds
-  it. It is never faked or optimistically marked green.
-- The Groq integration (email generator + AI assistant) calls the real Groq
-  API from a Cloud Function, with the API key as a Firebase **secret**
-  (never shipped to the browser), per-user daily rate limiting enforced in a
-  Firestore transaction, and errors logged to `activityLogs`.
-- The AI assistant is given **only** a static public-documentation string
-  baked into the function — it has no Firestore client, so it is
-  structurally incapable of leaking user data, not just prompted not to.
-
-**Intentionally limited (and why):**
-- **We never ask for a Firebase Admin SDK / service-account key.** That
-  would grant this platform full control over a user's Firebase project —
-  far too much trust to ask for. Connecting a project means storing its
-  Project ID and public web config, which is what "connected" means
-  throughout the UI.
-- **Email templates are not pushed live into the user's Firebase project.**
-  Firebase does not expose a public API for programmatically updating Auth
-  email templates. The editor stores the template and shows a live preview;
-  the UI is explicit that you copy the result into your own Firebase
-  console.
-- **Subdomain provisioning under `owenis.me` is admin-fulfilled, not
-  automatic.** Approving a request in the admin panel updates its status;
-  actually creating the DNS record on `owenis.me` requires access to that
-  domain's DNS provider, which isn't wired to any API in this build. The
-  README below documents where a Cloudflare/Route53 API integration would
-  plug in if you want to automate that step.
-- **SPF/DMARC records are not generated.** They don't prove domain
-  ownership the way a TXT challenge does, and Firebase Auth has no built-in
-  custom-SMTP concept to attach them to without an additional extension —
-  adding them would have been a checkbox that doesn't verify anything.
+Firestore was chosen because the data is naturally document/collection
+shaped, its **security rules** can express per-field and per-owner
+constraints precisely (this matters even more now that rules are the *only*
+backend), and compound queries (`where("userId","==",uid).orderBy(...)`)
+used throughout are first-class. RTDB's low-latency-sync advantage isn't
+needed here — everything changes at human speed.
 
 ## Project structure
 
 ```
 src/
-  components/
-    ui/          Design-system primitives (Button, Card, Input, Modal, Tabs, …)
-    layout/      Navbar, Sidebar, DashboardLayout, AdminLayout, PageTransition
-    auth/        ProtectedRoute / AdminRoute
-  context/       AuthContext (Firebase Auth + user doc + admin claim), ToastContext
-  hooks/         Firestore listeners (useUserProject, useSubdomainRequests, useAdminData, …)
-  lib/           firebase.ts (client SDK init), types.ts, validators.ts (Zod), helpContent.ts
+  components/ui/      Design-system primitives (Button, Card, Input, Modal, Tabs, …)
+  components/layout/  Navbar, Sidebar, DashboardLayout, AdminLayout, PageTransition
+  components/AuthActionBridge.tsx   Bridges Firebase's ?mode=&oobCode= query params into
+                                    the HashRouter route (see "Routing" below)
+  context/             AuthContext (Firebase Auth + Firestore user doc, email-based isAdmin),
+                        ToastContext
+  hooks/                Firestore listeners (useUserProject, useSubdomainRequests, useAdminData, …)
+  lib/
+    firebase.ts         Client SDK init (Auth + Firestore only — no Functions)
+    worker.ts            Calls the Cloudflare Worker for AI features
+    dns.ts                Client-side DNS-over-HTTPS verification
+    googleAuth.ts         Google Identity Services token client (Identity Toolkit scope)
+    identityToolkit.ts    Calls to the real Identity Toolkit Admin API v2
+    activityLog.ts        Self-reported activity log writes
+    validators.ts, types.ts, constants.ts, helpContent.ts
   pages/
-    public/      Home, Features, HowItWorks, PublicProjects, Docs, auth pages, /auth/action
-    dashboard/   Dashboard, ConnectFirebase, EmailConfig (+ email/ tabs), SubdomainRequest,
-                 AiEmailGenerator, AiAssistant, AccountSettings
-    admin/       AdminOverview, AdminUsers, AdminSubdomainRequests, AdminProjects,
-                 AdminAiSettings, AdminActivityLogs
-functions/
-  src/
-    callable/    One onCall function per privileged operation (see below)
-    triggers/    onUserCreate (Auth trigger — creates the Firestore user doc, grants admin
-                 via allowlist)
-    lib/         admin.ts (Admin SDK init), params.ts (ADMIN_EMAILS, GROQ_API_KEY secret),
-                 groq.ts, helpContent.ts (server copy used for the AI assistant)
-    utils/       validators.ts (Zod, mirrored from src/lib), rateLimit.ts, dns.ts, activityLog.ts
-firestore.rules            Security rules (see below)
-firestore.indexes.json     Composite indexes for the queries the app actually runs
+    public/    Home, Features, HowItWorks, PublicProjects, Docs, auth pages, /auth/action
+    dashboard/ Dashboard, ConnectFirebase, EmailConfig (+ email/ tabs incl. AuthorizedDomainsCard),
+               SubdomainRequest, AiEmailGenerator, AiAssistant, AccountSettings
+    admin/     AdminOverview, AdminUsers, AdminSubdomainRequests, AdminProjects,
+               AdminAiSettings, AdminActivityLogs
+worker/                 Cloudflare Worker — the only privileged backend piece
+  src/index.ts           Routes: POST /generate-email, POST /assistant
+  src/firebaseAuth.ts     Verifies Firebase ID tokens against Google's public JWKS
+  src/rateLimit.ts        Per-user daily limit via Cloudflare KV
+  src/aiSettings.ts       Reads admin-configured model/prompt settings from Firestore's
+                          public REST API (no service account needed for a plain read)
+  wrangler.toml
+.github/workflows/deploy.yml   Builds and deploys to GitHub Pages on push to main
+firestore.rules                 The actual security boundary — read this file
+firestore.indexes.json
 ```
+
+## Routing and Firebase Auth email links
+
+The app uses `HashRouter` (`/#/dashboard`, etc.) because GitHub Pages can't
+run server-side rewrites for a "real" client-side router — every unknown
+path would 404. `HashRouter` means the browser never even asks the server
+about anything after the `#`.
+
+This creates one wrinkle: Firebase builds auth action links (verify email,
+reset password) as `https://owenis.me/?mode=...&oobCode=...` — real query
+params, placed *before* any `#`. Under a plain `HashRouter` those would never
+reach `useSearchParams()`. `src/components/AuthActionBridge.tsx` fixes this:
+on load, it checks the real (non-hash) query string for Firebase's params
+and forwards them into the hash route, so `/auth/action`
+(`src/pages/public/AuthAction.tsx`) works exactly as if it were a normal
+route.
 
 ## Database structure
 
-All collections live at the top level except where noted.
-
 | Collection | Doc ID | Purpose |
 |---|---|---|
-| `users/{uid}` | Firebase Auth uid | Profile mirror: email, displayName, `isAdmin` (display only — real authorization is the custom claim), `disabled`, `aiCallsToday` / `aiCallsResetAt` (rate-limit state) |
+| `users/{uid}` | Firebase Auth uid | Created directly by the client right after sign-up (no server trigger needed). `isAdmin` is a display mirror only — real authorization is always `firestore.rules` checking the live token. |
 | `users/{uid}/aiEmailDrafts/{id}` | auto | Saved AI-generated email drafts, private to the owner |
-| `projects/{uid}` | **owner's uid** | One connected Firebase project per user. Holds `firebaseProjectId`, public `webApiKey`/`authDomain`, `status`, `actionUrls`, `dnsRecords[]`, `publicListing`/`publicDescription` |
+| `projects/{uid}` | **owner's uid** | One connected Firebase project per user |
 | `projects/{uid}/emailTemplates/{type}` | `verify_email` \| `password_reset` \| `email_address_change` \| `sms_verification` | Per-template subject/sender/reply-to/body |
-| `subdomainRequests/{id}` | auto | `userId`, `requestedSubdomain`, `status` (`pending`/`approved`/`denied`/`needs_changes`), `adminMessage`, timestamps |
-| `activityLogs/{id}` | auto | Server-written audit trail for every privileged action; admin-only read |
-| `aiSettings/config` | fixed | Groq model IDs, system prompts, token/rate limits, `enabled` toggle — admin-managed |
-| `publicProjects/{uid}` | owner's uid | Curated, admin-approved public mirror: `displayName`, `subdomain`, `description`, `joinedAt` — nothing private |
+| `subdomainRequests/{id}` | auto | `userId`, `requestedSubdomain`, `status`, `adminMessage`, timestamps |
+| `activityLogs/{id}` | auto | Self-reported (see table above); admin-read-only |
+| `aiSettings/config` | fixed | Groq model IDs, prompts, limits — **publicly readable** (the Worker reads it via plain REST, no credentials), admin-write-only |
+| `publicProjects/{uid}` | owner's uid | Curated, admin-approved public mirror |
 
-Using the owner's `uid` as the document ID for `projects` (and `publicProjects`)
-is what makes "one project per user" and ownership rules cheap to enforce —
-no query needed, just a doc-ID equality check.
+Using the owner's `uid` as the document ID for `projects` is what makes "one
+project per user" and ownership checks cheap and rule-friendly.
 
-## Security model
+## Security model — `firestore.rules` is the whole backend now
 
-1. **Firebase Authentication** is the identity provider. Custom claims
-   (`{ admin: true }`) are the *only* source of truth for admin access, and
-   they can only be set by Cloud Functions running with the Admin SDK — the
-   client never sets or reads anything else to determine admin status.
-2. **`firestore.rules`** denies direct client writes to every collection
-   except: a user updating their own `displayName` field. Every other
-   mutation (connecting a project, saving a template, requesting a
-   subdomain, reviewing a request, changing AI settings, disabling a user,
-   deleting an account) goes through a Cloud Function callable that
-   re-validates input with Zod and re-checks authorization from
-   `request.auth`, independent of whatever the client claims.
-3. Reads are scoped by owner or by the `admin` claim — e.g. a user can
-   `get`/`list` their own `subdomainRequests`, and the rule is written so
-   an unfiltered query (which could leak other users' requests) is rejected
-   outright rather than silently returning nothing.
-4. `activityLogs` and `aiSettings` are admin-read-only and never
-   client-writable.
-5. `publicProjects` is the **only** world-readable collection, and it only
-   ever contains the subset of fields an admin explicitly chose to publish.
+Read `firestore.rules` end to end; it's short and every line matters. The
+short version:
 
-See `firestore.rules` for the full, commented ruleset.
-
-## Cloud Functions (privileged backend)
-
-All in `functions/src/callable/`, exported from `functions/src/index.ts`:
-
-- **Auth/admin**: `bootstrapAdmin` (idempotent, allowlist-gated), `setAdminRole`
-- **Projects**: `connectProject`, `disconnectProject`
-- **Email config**: `updateActionUrls`, `saveEmailTemplate`,
-  `requestDomainVerification`, `verifyDns` (real DNS lookup)
-- **Subdomains**: `requestSubdomain`, `reviewSubdomainRequest` (admin)
-- **Admin management**: `setUserDisabled`, `setProjectPublicListing`
-- **AI**: `generateEmailWithAi`, `saveAiEmailDraft`, `aiAssistant`
-  (all Groq-backed, rate-limited, secret-gated)
-- **AI settings**: `updateAiSettings` (admin)
-- **Account**: `deleteMyAccount`
-
-Plus one Auth trigger, `onUserCreate` (`functions/src/triggers/onUserCreate.ts`),
-which creates the `users/{uid}` doc and grants the admin claim if the new
-user's email is on the `ADMIN_EMAILS` allowlist.
+1. **Admin** = signed in, `request.auth.token.email == "imcrabfr@gmail.com"`,
+   and `email_verified == true`. Change the email in the rules file (and in
+   `src/lib/constants.ts` for the UI convenience check) to change who's
+   admin, then `firebase deploy --only firestore:rules`.
+2. Every collection restricts *who* can write *which fields* — e.g. a
+   project owner can edit their own config but not `publicListing`
+   (admin-only, so users can't self-approve their public listing); a user
+   can rename themselves but not un-disable their own account.
+3. `aiSettings/config` is the one publicly-*readable* doc (the Worker needs
+   it), and `publicProjects` is the one publicly-readable *collection*.
+4. There is **no server-side uniqueness check** for subdomain requests — the
+   client checks for an existing active request before submitting, but a
+   race between two users is theoretically possible without a backend. The
+   admin resolves any duplicate on review.
+5. `isActiveUser(uid)` is checked on the owner-write paths as a rules-level
+   backstop for the disabled-account flag, on top of the client force-signing
+   disabled users out.
 
 ## Setup
 
 ### 1. Prerequisites
 
 - Node 20+, npm
-- A Firebase project ([console.firebase.google.com](https://console.firebase.google.com)) with **Authentication → Email/Password** and **Firestore** enabled
-- The [Firebase CLI](https://firebase.google.com/docs/cli): `npm install -g firebase-tools`, then `firebase login`
-- A [Groq API key](https://console.groq.com/keys) (only needed to use the AI features)
+- A Firebase project (Spark/free plan is enough) with **Authentication →
+  Email/Password** and **Firestore** enabled
+- The [Firebase CLI](https://firebase.google.com/docs/cli) (only needed to
+  deploy `firestore.rules` — no Hosting, no Functions):
+  `npm install -g firebase-tools`, then `firebase login`
+- A free [Cloudflare account](https://dash.cloudflare.com/sign-up) and the
+  [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/) (installed
+  as a dev dependency in `worker/`)
+- A [Groq API key](https://console.groq.com/keys)
+- A GitHub repository with **Pages** enabled, source set to **GitHub
+  Actions** (Settings → Pages → Build and deployment → Source)
 
 ### 2. Install dependencies
 
 ```bash
 npm install
-cd functions && npm install && cd ..
+cd worker && npm install && cd ..
 ```
 
-### 3. Point the CLI at your Firebase project
-
-```bash
-firebase use --add
-```
-
-(This updates `.firebaserc`. For local emulator testing, `--project demo-owenis`
-works too — see [Local development](#local-development-against-the-emulators).)
-
-### 4. Configure environment variables
+### 3. Configure environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Fill in the `VITE_FIREBASE_*` values from **Firebase console → Project
-settings → General → Your apps → Web app**. These are all public/client-safe
-values — none of them are secrets.
+Fill in `VITE_FIREBASE_*` from **Firebase console → Project settings →
+General → Your apps → Web app** (all public/client-safe values). Leave
+`VITE_GOOGLE_OAUTH_CLIENT_ID` blank until step 6 if you want the authorized-
+domains feature.
 
-### 5. Configure the admin allowlist and Groq secret
-
-- `ADMIN_EMAILS` (a plain, non-secret param — see `functions/src/lib/params.ts`)
-  defaults to `imcrabfr@gmail.com`. To add more admins, set it via a
-  `functions/.env` file, which the Functions deploy picks up automatically:
-  ```bash
-  echo "ADMIN_EMAILS=you@example.com,teammate@example.com" > functions/.env
-  ```
-- The Groq key is a **secret**, deployed separately from regular config:
-  ```bash
-  firebase functions:secrets:set GROQ_API_KEY
-  ```
-  For local emulator testing, put a real (or placeholder) key in
-  `functions/.secret.local` (already gitignored):
-  `GROQ_API_KEY=your-real-or-placeholder-key`
-
-### 6. Deploy security rules, indexes, and functions
+### 4. Point the CLI at your Firebase project and deploy rules
 
 ```bash
-firebase deploy --only firestore:rules,firestore:indexes,functions
+firebase use --add
+firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-### 7. Deploy the frontend (Firebase Hosting)
+### 5. Set up the Cloudflare Worker
 
 ```bash
-npm run build
-firebase deploy --only hosting
+cd worker
+npx wrangler kv namespace create RATE_LIMIT
+# paste the returned id into wrangler.toml's [[kv_namespaces]] block
+npx wrangler secret put GROQ_API_KEY
+npx wrangler deploy
 ```
 
-Set up `owenis.me` as a custom domain under **Hosting → Add custom domain**
-in the Firebase console, and point its DNS at Firebase per the instructions
-it gives you.
+Note the deployed Worker URL (`https://owenis-me-ai.<your-subdomain>.workers.dev`
+by default) — you'll need it for `VITE_WORKER_URL`.
 
-### 8. First admin login
+Also edit `ALLOWED_ORIGINS` in `worker/src/index.ts` if your domain differs
+from `owenis.me`.
 
-Sign up through the app with the email in `ADMIN_EMAILS`
-(`imcrabfr@gmail.com` by default). The `onUserCreate` trigger grants the
-admin claim automatically; `/admin` becomes accessible immediately after
-sign-up (the client force-refreshes its ID token once the claim is granted).
+### 6. (Optional) Set up Google OAuth for the authorized-domains feature
 
-## Local development against the emulators
+This is the one feature that pushes a real change into a user's live
+Firebase project. It needs a one-time OAuth Client ID from **you**, the site
+operator — end users never touch Google Cloud Console themselves, they just
+click "Connect Google" and consent.
+
+1. Go to [Google Cloud Console → APIs & Services →
+   Credentials](https://console.cloud.google.com/apis/credentials), for the
+   Google Cloud project backing your Firebase project (or any project you
+   control).
+2. Enable the **Identity Toolkit API** (APIs & Services → Library → search
+   "Identity Toolkit API" → Enable).
+3. Configure the **OAuth consent screen** if you haven't already (External
+   or Internal; add the `identitytoolkit` scope isn't required to be listed
+   as "sensitive" here, but you may need to add test users while your app is
+   unverified).
+4. Create an **OAuth 2.0 Client ID** of type **Web application**.
+   - Authorized JavaScript origins: `https://owenis.me` and
+     `http://localhost:5173` (for local dev).
+   - No redirect URI needed — this uses Google Identity Services' token-client
+     (implicit) flow, popup-based.
+5. Copy the Client ID into `VITE_GOOGLE_OAUTH_CLIENT_ID` (and the GitHub
+   Actions secret of the same name).
+
+Without this, the "Authorized domains" card on the Action URLs tab simply
+doesn't render — everything else works fine.
+
+### 7. GitHub Actions secrets
+
+Add these under **Settings → Secrets and variables → Actions**:
+
+`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`,
+`VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`,
+`VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`,
+`VITE_WORKER_URL`, `VITE_GOOGLE_OAUTH_CLIENT_ID` (optional).
+
+### 8. Deploy
 
 ```bash
-firebase emulators:start --only auth,firestore,functions
+git push origin main
 ```
 
-In a second terminal, with `VITE_USE_EMULATORS=true` in `.env`:
+The `deploy.yml` workflow builds and publishes `dist/` to GitHub Pages
+automatically. The `CNAME` file (`public/CNAME`, containing `owenis.me`) is
+copied into every build so GitHub Pages keeps the custom domain configured.
+
+### 9. First admin login
+
+Sign up through the app with `imcrabfr@gmail.com` (or whatever you changed
+the admin email to in `firestore.rules` + `src/lib/constants.ts`). Admin
+access requires the account's email to be **verified** — check your inbox
+and click the link before `/admin` will load data (Firestore rules will
+otherwise deny the reads).
+
+## Local development
+
+Three things run locally, in three terminals:
 
 ```bash
+# 1. Firebase emulators (Auth + Firestore — no Functions emulator needed)
+firebase emulators:start --only auth,firestore
+
+# 2. The Cloudflare Worker
+cd worker && npm run dev
+
+# 3. The frontend
 npm run dev
 ```
 
-The Emulator UI is at `http://127.0.0.1:4000`. `functions/.secret.local`
-supplies `GROQ_API_KEY` locally (the Groq calls will actually hit the real
-Groq API if you put a real key there — emulating Functions doesn't mock
-third-party HTTP calls).
+With `VITE_USE_EMULATORS=true` in `.env`, the frontend talks to the local
+emulators. `worker/.dev.vars` (gitignored) supplies `GROQ_API_KEY` locally —
+the Worker will make *real* Groq API calls even in dev, since Groq itself
+isn't emulated.
 
-## Extending: automating subdomain DNS
+`worker/.dev.vars` also sets `FIREBASE_AUTH_EMULATOR=true`, which is
+**dev-only** and never set in production: the Firebase Auth emulator signs
+tokens with a fake key that can never verify against Google's real public
+keys, so the Worker falls back to decoding (not cryptographically verifying)
+the token when this flag is set. Standard claims (issuer/audience/expiry)
+are still checked. This flag must never be set on the deployed Worker
+(`wrangler.toml` doesn't set it, and it isn't a secret you'd `wrangler secret
+put`) — production always does full signature verification.
 
-To fully automate `*.owenis.me` provisioning on request approval, add a
-Cloudflare (or other DNS provider) API token as a Cloud Functions secret and
-call their API from inside `reviewSubdomainRequest`
-(`functions/src/callable/subdomains.ts`) when `status === "approved"`. That
-integration is intentionally not included here — it requires DNS provider
-credentials for the platform's own domain that only the site owner has.
+The Firestore Emulator UI is at `http://127.0.0.1:4000`.

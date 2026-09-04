@@ -1,4 +1,4 @@
-import { httpsCallable } from "firebase/functions";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { AlertCircle, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -11,7 +11,8 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/context/ToastContext";
 import { useActivityLogs, useAiSettings } from "@/hooks/useAdminData";
-import { functions } from "@/lib/firebase";
+import { logActivity } from "@/lib/activityLog";
+import { db } from "@/lib/firebase";
 import { GROQ_MODELS, type GroqModelId } from "@/lib/types";
 import { relativeTime } from "@/lib/utils";
 
@@ -65,8 +66,12 @@ export default function AdminAiSettings() {
     e.preventDefault();
     setSaving(true);
     try {
-      const fn = httpsCallable(functions, "updateAiSettings");
-      await fn(form);
+      await setDoc(
+        doc(db, "aiSettings", "config"),
+        { provider: "groq", ...form, updatedAt: serverTimestamp() },
+        { merge: true },
+      );
+      logActivity("ai_settings_updated");
       push({ kind: "success", title: "AI settings saved" });
     } catch (err) {
       push({ kind: "error", title: "Couldn't save settings", description: err instanceof Error ? err.message : undefined });

@@ -9,11 +9,6 @@ import {
   type Firestore,
   getFirestore,
 } from "firebase/firestore";
-import {
-  connectFunctionsEmulator,
-  type Functions,
-  getFunctions,
-} from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -31,13 +26,11 @@ export const firebaseConfigured = Boolean(
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
-let functions: Functions;
 
 if (firebaseConfigured) {
   app = getApps().length ? getApps()[0]! : initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
-  functions = getFunctions(app);
 
   if (import.meta.env.VITE_USE_EMULATORS === "true") {
     // Guard against double-connect during HMR.
@@ -47,7 +40,6 @@ if (firebaseConfigured) {
         disableWarnings: true,
       });
       connectFirestoreEmulator(db, "127.0.0.1", 8080);
-      connectFunctionsEmulator(functions, "127.0.0.1", 5001);
       w.__emulatorsConnected = true;
     }
   }
@@ -57,7 +49,6 @@ if (firebaseConfigured) {
   app = undefined as unknown as FirebaseApp;
   auth = undefined as unknown as Auth;
   db = undefined as unknown as Firestore;
-  functions = undefined as unknown as Functions;
 }
 
-export { app, auth, db, functions };
+export { app, auth, db };

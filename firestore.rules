@@ -11,27 +11,50 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
-    // Admin status is a Firebase Auth custom claim, set only by server-side
-    // Cloud Functions (firebase-admin). It cannot be set or spoofed from the client.
+    // There is no backend (Cloud Functions require the paid Blaze plan, and
+    // this site is a static export on GitHub Pages) — so "admin" here is not
+    // a custom claim set by privileged server code. It's the caller's own
+    // Firebase-verified, verified-email address, checked by Firestore's
+    // servers on every request. The client can never forge request.auth.token.
     function isAdmin() {
-      return isSignedIn() && request.auth.token.admin == true;
+      return isSignedIn()
+        && request.auth.token.email == "imcrabfr@gmail.com"
+        && request.auth.token.email_verified == true;
+    }
+
+    // App-level account disable (there's no Admin SDK here to suspend the
+    // real Firebase Auth account) — this is the enforcement backstop beyond
+    // the client force-signing the user out when it sees disabled:true.
+    function isActiveUser(uid) {
+      return !exists(/databases/$(database)/documents/users/$(uid))
+        || get(/databases/$(database)/documents/users/$(uid)).data.get('disabled', false) != true;
     }
 
     // --- users/{uid} ---
-    // Created only by the onUserCreate Cloud Function (Admin SDK bypasses rules).
-    // Clients may update only their own displayName; everything privileged
-    // (isAdmin, disabled, aiCallsToday) is server-managed.
+    // Created directly by the client right after sign-up (no server trigger
+    // needed — nothing else runs between account creation and this write).
     match /users/{uid} {
       allow get: if isOwner(uid) || isAdmin();
       allow list: if isAdmin();
-      allow create: if false;
-      allow update: if isOwner(uid)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName']);
-      allow delete: if false;
+
+      allow create: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.disabled == false
+        && request.resource.data.isAdmin == (request.auth.token.email == "imcrabfr@gmail.com")
+        && request.resource.data.keys().hasOnly(
+          ['uid', 'email', 'displayName', 'createdAt', 'disabled', 'isAdmin', 'aiCallsToday', 'aiCallsResetAt']);
+
+      // Owner may rename themselves; only admin may flip the disabled flag —
+      // never both at once.
+      allow update: if
+        (isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName']))
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['disabled']));
+
+      allow delete: if isOwner(uid);
 
       match /aiEmailDrafts/{draftId} {
-        allow get, list: if isOwner(uid) || isAdmin();
-        allow write: if false; // written by callable functions only
+        allow read, write: if isOwner(uid);
       }
     }
 
@@ -39,11 +62,35 @@ service cloud.firestore {
     match /projects/{uid} {
       allow get: if isOwner(uid) || isAdmin();
       allow list: if isAdmin();
-      allow write: if false; // connect/update/disconnect go through callable functions
+
+      allow create: if isOwner(uid)
+        && isActiveUser(uid)
+        && request.resource.data.ownerId == uid
+        && request.resource.data.id == uid
+        && request.resource.data.publicListing == false
+        && request.resource.data.publicDescription == null
+        && request.resource.data.keys().hasOnly([
+          'id', 'ownerId', 'firebaseProjectId', 'displayName', 'webApiKey', 'authDomain',
+          'status', 'publicListing', 'publicDescription', 'actionUrls', 'dnsRecords',
+          'createdAt', 'updatedAt', 'emailDomain'
+        ]);
+
+      // Owner edits their own config; admin may only flip the public-listing
+      // fields (can't be self-approved by the project owner).
+      allow update: if
+        (isOwner(uid) && isActiveUser(uid) && request.resource.data.ownerId == uid && request.resource.data.id == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'firebaseProjectId', 'displayName', 'webApiKey', 'authDomain', 'status',
+            'actionUrls', 'dnsRecords', 'updatedAt', 'emailDomain'
+          ]))
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+          ['publicListing', 'publicDescription', 'updatedAt']));
+
+      allow delete: if isOwner(uid);
 
       match /emailTemplates/{templateType} {
-        allow get, list: if isOwner(uid) || isAdmin();
-        allow write: if false;
+        allow read: if isOwner(uid) || isAdmin();
+        allow write: if isOwner(uid) && isActiveUser(uid);
       }
     }
 
@@ -54,25 +101,51 @@ service cloud.firestore {
       // caller's uid (as useSubdomainRequests does) — an unfiltered query is rejected
       // for non-admins rather than silently leaking other users' requests.
       allow get, list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow write: if false; // requestSubdomain / reviewSubdomainRequest callables only
+
+      allow create: if isSignedIn()
+        && isActiveUser(request.auth.uid)
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.adminMessage == null
+        && request.resource.data.reviewedBy == null
+        && request.resource.data.requestedSubdomain.matches('^[a-z0-9]([a-z0-9-]*[a-z0-9])?$')
+        && request.resource.data.requestedSubdomain.size() >= 3
+        && request.resource.data.requestedSubdomain.size() <= 30;
+
+      // Only admin reviews requests. There is no server to enforce global
+      // subdomain uniqueness without a backend — the client checks for an
+      // existing active request before submitting, but a race is possible;
+      // the admin resolves any duplicates on review. See README.
+      allow update: if isAdmin();
+
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
-    // --- activityLogs/{id} --- admin-only, server-written
+    // --- activityLogs/{id} --- admin-read, self-reported by clients
+    // (best-effort audit trail — without a backend, a client could in theory
+    // skip writing one; this is a visibility aid, not a tamper-proof log).
     match /activityLogs/{id} {
       allow get, list: if isAdmin();
-      allow write: if false;
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.actorEmail == request.auth.token.email;
+      allow update, delete: if false;
     }
 
-    // --- aiSettings/config --- admin-only read, server-written
+    // --- aiSettings/config --- publicly readable (the Cloudflare Worker
+    // reads it via Firestore's public REST API, no service account needed),
+    // admin-write-only.
     match /aiSettings/{docId} {
-      allow get: if isAdmin();
-      allow write: if false;
+      allow get: if true;
+      allow write: if isAdmin();
     }
 
     // --- publicProjects/{uid} --- world-readable curated directory
     match /publicProjects/{uid} {
       allow get, list: if true;
-      allow write: if false; // maintained by setProjectPublicListing callable
+      allow create, update: if isAdmin();
+      // Owner may remove their own listing (e.g. when deleting their account).
+      allow delete: if isAdmin() || isOwner(uid);
     }
   }
 }

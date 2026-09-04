@@ -1,4 +1,5 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { HashRouter, Route, Routes } from "react-router-dom";
+import { AuthActionBridge } from "@/components/AuthActionBridge";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -32,9 +33,10 @@ import SignUp from "@/pages/public/SignUp";
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <AuthProvider>
         <ToastProvider>
+          <AuthActionBridge />
           <ScrollToTop />
           <Routes>
             <Route element={<PublicLayout />}>
@@ -83,6 +85,6 @@ export default function App() {
           </Routes>
         </ToastProvider>
       </AuthProvider>
-    </BrowserRouter>
+    </HashRouter>
   );
 }

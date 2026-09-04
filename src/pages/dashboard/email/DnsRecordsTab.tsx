@@ -1,4 +1,4 @@
-import { httpsCallable } from "firebase/functions";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { CheckCircle2, Clock, Globe, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -6,11 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CopyButton } from "@/components/ui/CopyButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { functions } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
+import { generateVerificationToken, verifyTxtRecord } from "@/lib/dns";
 import type { DnsRecord, FirebaseProjectDoc } from "@/lib/types";
 
 export function DnsRecordsTab({ project }: { project: FirebaseProjectDoc | null }) {
+  const { user } = useAuth();
   const { push } = useToast();
   const [domain, setDomain] = useState("");
   const [requesting, setRequesting] = useState(false);
@@ -18,11 +21,21 @@ export function DnsRecordsTab({ project }: { project: FirebaseProjectDoc | null 
 
   async function handleRequest(e: React.FormEvent) {
     e.preventDefault();
-    if (!domain.trim()) return;
+    if (!domain.trim() || !user) return;
     setRequesting(true);
     try {
-      const fn = httpsCallable(functions, "requestDomainVerification");
-      await fn({ domain: domain.trim() });
+      const record: DnsRecord = {
+        type: "TXT",
+        host: domain.trim().toLowerCase(),
+        value: generateVerificationToken(),
+        purpose: "Proves you control this domain before custom email sending is enabled.",
+        verified: false,
+      };
+      await setDoc(
+        doc(db, "projects", user.uid),
+        { dnsRecords: [record], updatedAt: serverTimestamp() },
+        { merge: true },
+      );
       push({ kind: "success", title: "Verification record generated", description: "Add the TXT record below, then verify." });
       setDomain("");
     } catch (err) {
@@ -33,14 +46,21 @@ export function DnsRecordsTab({ project }: { project: FirebaseProjectDoc | null 
   }
 
   async function handleVerify() {
+    const record = project?.dnsRecords?.[0];
+    if (!record || !user) return;
     setVerifying(true);
     try {
-      const fn = httpsCallable<unknown, { verified: boolean }>(functions, "verifyDns");
-      const result = await fn();
+      const verified = await verifyTxtRecord(record.host, record.value);
+      const updatedRecords = (project?.dnsRecords ?? []).map((r, i) => (i === 0 ? { ...r, verified } : r));
+      await setDoc(
+        doc(db, "projects", user.uid),
+        { dnsRecords: updatedRecords, updatedAt: serverTimestamp() },
+        { merge: true },
+      );
       push({
-        kind: result.data.verified ? "success" : "info",
-        title: result.data.verified ? "Domain verified" : "Not verified yet",
-        description: result.data.verified
+        kind: verified ? "success" : "info",
+        title: verified ? "Domain verified" : "Not verified yet",
+        description: verified
           ? "DNS ownership confirmed."
           : "The TXT record wasn't found yet. DNS changes can take up to 48 hours.",
       });

@@ -1,0 +1,18 @@
+name = "owenis-me-ai"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Free tier: 100,000 requests/day. No credit card required.
+# Secrets (set with `wrangler secret put <NAME>`, never in this file):
+#   GROQ_API_KEY        — from https://console.groq.com/keys
+#
+# Vars (plain, safe to commit):
+[vars]
+FIREBASE_PROJECT_ID = "owenisme-2e155"
+
+# KV namespace for per-user daily rate limiting.
+# Create with: wrangler kv namespace create RATE_LIMIT
+# then paste the returned id below.
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"

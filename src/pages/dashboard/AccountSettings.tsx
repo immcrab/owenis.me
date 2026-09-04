@@ -1,6 +1,5 @@
 import { updateProfile as updateAuthProfile } from "firebase/auth";
-import { doc, updateDoc } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
+import { collection, deleteDoc, doc, getDocs, query, updateDoc, where, writeBatch } from "firebase/firestore";
 import { AlertTriangle, CheckCircle2, Mail, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -11,10 +10,10 @@ import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { db, functions } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 
 export default function AccountSettings() {
-  const { user, userDoc, resendVerification, resetPassword, signOutUser } = useAuth();
+  const { user, userDoc, resendVerification, resetPassword, deleteAccount } = useAuth();
   const { push } = useToast();
   const navigate = useNavigate();
 
@@ -23,6 +22,8 @@ export default function AccountSettings() {
   const [sendingVerify, setSendingVerify] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   if (!user) return null;
@@ -66,15 +67,43 @@ export default function AccountSettings() {
     }
   }
 
-  async function handleDelete() {
+  async function handleDelete(e: React.FormEvent) {
+    e.preventDefault();
+    setDeleteError(null);
     setDeleting(true);
     try {
-      const fn = httpsCallable(functions, "deleteMyAccount");
-      await fn();
-      await signOutUser();
+      const uid = user!.uid;
+
+      const templatesSnap = await getDocs(collection(db, "projects", uid, "emailTemplates"));
+      const draftsSnap = await getDocs(collection(db, "users", uid, "aiEmailDrafts"));
+      const requestsSnap = await getDocs(query(collection(db, "subdomainRequests"), where("userId", "==", uid)));
+
+      const batch = writeBatch(db);
+      templatesSnap.forEach((d) => batch.delete(d.ref));
+      draftsSnap.forEach((d) => batch.delete(d.ref));
+      requestsSnap.forEach((d) => batch.delete(d.ref));
+      batch.delete(doc(db, "projects", uid));
+      batch.delete(doc(db, "publicProjects", uid));
+      batch.delete(doc(db, "users", uid));
+      await batch.commit().catch(() => {
+        // Some of these docs may not exist or may already be gone — fall
+        // through to per-doc deletes so one missing doc doesn't block the rest.
+      });
+
+      // Belt-and-suspenders: retry any stragglers individually, ignoring
+      // "not found"-style failures.
+      await Promise.allSettled([
+        deleteDoc(doc(db, "projects", uid)),
+        deleteDoc(doc(db, "publicProjects", uid)),
+      ]);
+
+      // This reauthenticates (password) and deletes the Firebase Auth
+      // account itself — self-service, no Admin SDK needed.
+      await deleteAccount(deletePassword);
       navigate("/");
     } catch (err) {
-      push({ kind: "error", title: "Couldn't delete account", description: err instanceof Error ? err.message : undefined });
+      setDeleteError(err instanceof Error ? err.message : "Couldn't delete account. Please try again.");
+    } finally {
       setDeleting(false);
     }
   }
@@ -153,18 +182,29 @@ export default function AccountSettings() {
         title="Delete your account?"
         description="This permanently removes your account, connected project, templates, and subdomain requests."
       >
-        <div className="flex items-start gap-3 rounded-lg border border-[var(--color-danger-subtle)] bg-[var(--color-danger-subtle)] p-3">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-[var(--color-danger)]" />
-          <p className="text-sm text-[var(--color-text-primary)]">This action cannot be undone.</p>
-        </div>
-        <div className="mt-5 flex justify-end gap-3">
-          <Button variant="outline" onClick={() => setConfirmDelete(false)}>
-            Cancel
-          </Button>
-          <Button variant="danger" loading={deleting} onClick={handleDelete}>
-            Delete my account
-          </Button>
-        </div>
+        <form onSubmit={handleDelete} className="space-y-4">
+          <div className="flex items-start gap-3 rounded-lg border border-[var(--color-danger-subtle)] bg-[var(--color-danger-subtle)] p-3">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-[var(--color-danger)]" />
+            <p className="text-sm text-[var(--color-text-primary)]">This action cannot be undone.</p>
+          </div>
+          <Input
+            label="Confirm your password"
+            type="password"
+            required
+            value={deletePassword}
+            onChange={(e) => setDeletePassword(e.target.value)}
+            error={deleteError ?? undefined}
+            hint="Deleting your own account requires re-entering your password."
+          />
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="danger" loading={deleting}>
+              Delete my account
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

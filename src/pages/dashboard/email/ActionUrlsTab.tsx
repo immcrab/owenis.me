@@ -1,17 +1,21 @@
-import { httpsCallable } from "firebase/functions";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { Info, KeyRound } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
+import { logActivity } from "@/lib/activityLog";
 import { ACTION_URL_HELP } from "@/lib/constants";
-import { functions } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import type { FirebaseProjectDoc } from "@/lib/types";
 import { actionUrlsSchema } from "@/lib/validators";
+import { AuthorizedDomainsCard } from "@/pages/dashboard/email/AuthorizedDomainsCard";
 
 export function ActionUrlsTab({ project }: { project: FirebaseProjectDoc | null }) {
+  const { user } = useAuth();
   const { push } = useToast();
   const [continueUrl, setContinueUrl] = useState(project?.actionUrls?.continueUrl ?? "");
   const [customDomain, setCustomDomain] = useState(project?.actionUrls?.customDomain ?? "");
@@ -37,10 +41,21 @@ export function ActionUrlsTab({ project }: { project: FirebaseProjectDoc | null 
       setErrors(fieldErrors);
       return;
     }
+    if (!user) return;
     setSaving(true);
     try {
-      const fn = httpsCallable(functions, "updateActionUrls");
-      await fn(parsed.data);
+      await setDoc(
+        doc(db, "projects", user.uid),
+        {
+          actionUrls: {
+            continueUrl: parsed.data.continueUrl,
+            customDomain: parsed.data.customDomain || null,
+          },
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      logActivity("action_urls_updated");
       push({ kind: "success", title: "Action URLs saved" });
     } catch (err) {
       push({ kind: "error", title: "Couldn't save", description: err instanceof Error ? err.message : undefined });
@@ -90,6 +105,8 @@ export function ActionUrlsTab({ project }: { project: FirebaseProjectDoc | null 
           </CardContent>
         </form>
       </Card>
+
+      <AuthorizedDomainsCard firebaseProjectId={project.firebaseProjectId} />
     </div>
   );
 }

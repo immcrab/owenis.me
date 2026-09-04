@@ -1,4 +1,4 @@
-import { httpsCallable } from "firebase/functions";
+import { collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { Link2, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { SubdomainStatusBadge } from "@/components/StatusBadge";
@@ -8,15 +8,18 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageSpinner } from "@/components/ui/Spinner";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useSubdomainRequests } from "@/hooks/useSubdomainRequests";
 import { useUserProject } from "@/hooks/useUserProject";
+import { logActivity } from "@/lib/activityLog";
 import { PLATFORM_DOMAIN } from "@/lib/constants";
-import { functions } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { formatDateTime } from "@/lib/utils";
 import { subdomainSchema } from "@/lib/validators";
 
 export default function SubdomainRequest() {
+  const { user } = useAuth();
   const { requests, loading } = useSubdomainRequests();
   const { project } = useUserProject();
   const { push } = useToast();
@@ -35,10 +38,28 @@ export default function SubdomainRequest() {
       setError(parsed.error.issues[0]?.message ?? "Invalid subdomain");
       return;
     }
+    if (!user) return;
     setSubmitting(true);
     try {
-      const fn = httpsCallable(functions, "requestSubdomain");
-      await fn({ requestedSubdomain: parsed.data });
+      // No pre-submit uniqueness check: without a backend, a query across
+      // other users' requests would require reading documents this user
+      // doesn't own, which firestore.rules correctly refuses (it can't
+      // prove an unfiltered cross-user query is safe). Duplicates are
+      // instead caught by the admin during review — see README.
+      const ref = doc(collection(db, "subdomainRequests"));
+      await setDoc(ref, {
+        id: ref.id,
+        userId: user.uid,
+        projectId: project ? user.uid : null,
+        requestedSubdomain: parsed.data,
+        status: "pending",
+        adminMessage: null,
+        dnsRecords: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        reviewedBy: null,
+      });
+      logActivity("subdomain_requested", { requestedSubdomain: parsed.data });
       push({ kind: "success", title: "Request submitted", description: `${parsed.data}.${PLATFORM_DOMAIN}` });
       setValue("");
     } catch (err) {

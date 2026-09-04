@@ -1,4 +1,4 @@
-import { httpsCallable } from "firebase/functions";
+import { collection, serverTimestamp, addDoc } from "firebase/firestore";
 import { Save, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -8,20 +8,21 @@ import { Input } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useAiEmailDrafts } from "@/hooks/useAiEmailDrafts";
-import { functions } from "@/lib/firebase";
+import { logActivity } from "@/lib/activityLog";
+import { db } from "@/lib/firebase";
+import { generateEmail, type GenerateEmailResult } from "@/lib/worker";
 import { formatDateTime } from "@/lib/utils";
 
 const EMAIL_TYPES = ["Welcome", "Announcement", "Newsletter", "Follow-up", "Apology / Incident", "Promotional"];
 const TONES = ["Professional", "Friendly", "Casual", "Formal", "Enthusiastic", "Empathetic"];
 
-interface GenerateResult {
-  subject: string;
-  bodyText: string;
-}
+type GenerateResult = GenerateEmailResult;
 
 export default function AiEmailGenerator() {
+  const { user } = useAuth();
   const { push } = useToast();
   const { drafts } = useAiEmailDrafts();
 
@@ -47,9 +48,9 @@ export default function AiEmailGenerator() {
     setGenerating(true);
     setResult(null);
     try {
-      const fn = httpsCallable<unknown, GenerateResult>(functions, "generateEmailWithAi");
-      const res = await fn({ emailType, tone, purpose, brandName, mainMessage, extraInstructions });
-      setResult(res.data);
+      const res = await generateEmail({ emailType, tone, purpose, brandName, mainMessage, extraInstructions });
+      setResult(res);
+      logActivity("ai_email_generated", { emailType, tone });
     } catch (err) {
       push({ kind: "error", title: "Generation failed", description: err instanceof Error ? err.message : "Please try again." });
     } finally {
@@ -58,11 +59,16 @@ export default function AiEmailGenerator() {
   }
 
   async function handleSave() {
-    if (!result) return;
+    if (!result || !user) return;
     setSaving(true);
     try {
-      const fn = httpsCallable(functions, "saveAiEmailDraft");
-      await fn({ ...result, emailType, tone });
+      await addDoc(collection(db, "users", user.uid, "aiEmailDrafts"), {
+        ...result,
+        emailType,
+        tone,
+        createdAt: serverTimestamp(),
+      });
+      logActivity("ai_draft_saved");
       push({ kind: "success", title: "Draft saved" });
     } catch (err) {
       push({ kind: "error", title: "Couldn't save draft", description: err instanceof Error ? err.message : undefined });
