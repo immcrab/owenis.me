@@ -1,0 +1,78 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Admin status is a Firebase Auth custom claim, set only by server-side
+    // Cloud Functions (firebase-admin). It cannot be set or spoofed from the client.
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    // --- users/{uid} ---
+    // Created only by the onUserCreate Cloud Function (Admin SDK bypasses rules).
+    // Clients may update only their own displayName; everything privileged
+    // (isAdmin, disabled, aiCallsToday) is server-managed.
+    match /users/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if false;
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName']);
+      allow delete: if false;
+
+      match /aiEmailDrafts/{draftId} {
+        allow get, list: if isOwner(uid) || isAdmin();
+        allow write: if false; // written by callable functions only
+      }
+    }
+
+    // --- projects/{uid} --- (doc ID == owner's uid; one project per user)
+    match /projects/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow write: if false; // connect/update/disconnect go through callable functions
+
+      match /emailTemplates/{templateType} {
+        allow get, list: if isOwner(uid) || isAdmin();
+        allow write: if false;
+      }
+    }
+
+    // --- subdomainRequests/{id} ---
+    match /subdomainRequests/{id} {
+      // "list" is evaluated per-document in the query's potential result set, so this
+      // is only satisfiable when the client query itself filters on userId == the
+      // caller's uid (as useSubdomainRequests does) — an unfiltered query is rejected
+      // for non-admins rather than silently leaking other users' requests.
+      allow get, list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow write: if false; // requestSubdomain / reviewSubdomainRequest callables only
+    }
+
+    // --- activityLogs/{id} --- admin-only, server-written
+    match /activityLogs/{id} {
+      allow get, list: if isAdmin();
+      allow write: if false;
+    }
+
+    // --- aiSettings/config --- admin-only read, server-written
+    match /aiSettings/{docId} {
+      allow get: if isAdmin();
+      allow write: if false;
+    }
+
+    // --- publicProjects/{uid} --- world-readable curated directory
+    match /publicProjects/{uid} {
+      allow get, list: if true;
+      allow write: if false; // maintained by setProjectPublicListing callable
+    }
+  }
+}
