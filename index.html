@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#1b1a18" />
+<title>Owenis.me — short links for Firebase projects</title>
+<meta name="description" content="Turn my-app-3f9c2.web.app into owenis.me/my-app. One short link for every Firebase project you ship." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Instrument+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1b1a18;
+    --ink-deep:#121110;
+    --ink-raise:#232120;
+    --paper:#f4efe3;
+    --muted:#9c9384;
+    --mark:#e8c547;
+    --rule:rgba(244,239,227,.14);
+    --measure:34rem;
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+
+  html{-webkit-text-size-adjust:100%}
+
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--paper);
+    font-family:"Instrument Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:17px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    background:
+      linear-gradient(180deg,rgba(232,197,71,.05),transparent 40%),
+      repeating-linear-gradient(180deg,transparent 0 39px,rgba(244,239,227,.028) 39px 40px);
+    pointer-events:none;
+    z-index:0;
+  }
+
+  .wrap{position:relative;z-index:1;max-width:64rem;margin:0 auto;padding:0 1.5rem}
+
+  h1,h2,h3{
+    font-family:"Bricolage Grotesque","Instrument Sans",sans-serif;
+    font-weight:800;
+    letter-spacing:-.02em;
+    line-height:1.03;
+    margin:0;
+  }
+
+  a{color:inherit}
+
+  :focus-visible{outline:2px solid var(--mark);outline-offset:3px;border-radius:2px}
+
+  .masthead{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:1.5rem;
+    padding:1.75rem 0 1.25rem;
+    flex-wrap:wrap;
+  }
+  .wordmark{
+    font-family:"Bricolage Grotesque",sans-serif;
+    font-weight:800;
+    font-size:1.15rem;
+    letter-spacing:-.03em;
+    text-decoration:none;
+  }
+  .wordmark .dot{color:var(--mark)}
+  .masthead nav{display:flex;gap:1.5rem;font-size:.95rem}
+  .masthead nav a{
+    color:var(--muted);
+    text-decoration:none;
+    padding-bottom:2px;
+    border-bottom:1px solid transparent;
+    transition:color .18s ease,border-color .18s ease;
+  }
+  .masthead nav a:hover{color:var(--paper);border-bottom-color:var(--mark)}
+
+  .hero{padding:4.5rem 0 5rem;border-top:1px solid var(--rule)}
+  .hero h1{font-size:clamp(2.6rem,7.5vw,5rem);max-width:16ch}
+  .hero .lede{
+    margin:1.6rem 0 0;
+    max-width:var(--measure);
+    color:var(--muted);
+    font-size:1.075rem;
+  }
+  .hero .lede b{color:var(--paper);font-weight:500}
+
+  .demo{
+    margin:3rem 0 0;
+    font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:clamp(.85rem,2.9vw,1.15rem);
+  }
+  .demo-row{display:flex;align-items:center;gap:.9rem;min-height:2.4em}
+  .demo-before{position:relative;display:inline-block;color:var(--muted);white-space:nowrap}
+  .caret{
+    display:inline-block;
+    width:.55em;
+    height:1.1em;
+    background:var(--mark);
+    vertical-align:-.18em;
+    margin-left:.1em;
+    animation:blink 1s steps(1) infinite;
+  }
+  .caret.done{animation:none;opacity:0}
+  @keyframes blink{50%{opacity:0}}
+
+  .strike{
+    position:absolute;
+    left:-.15em;
+    top:52%;
+    height:2px;
+    width:0;
+    background:var(--paper);
+    transform:rotate(-1.2deg);
+    transform-origin:left center;
+  }
+  .strike.draw{animation:strike .38s cubic-bezier(.6,0,.35,1) forwards}
+  @keyframes strike{to{width:calc(100% + .3em)}}
+
+  .demo-verb{
+    font-family:"Instrument Sans",sans-serif;
+    color:var(--muted);
+    font-size:.85rem;
+    opacity:0;
+    padding-left:.1em;
+  }
+  .demo-verb.show{animation:rise .4s ease forwards}
+
+  .demo-after{
+    position:relative;
+    display:inline-block;
+    color:var(--paper);
+    font-weight:500;
+    white-space:nowrap;
+    opacity:0;
+  }
+  .demo-after.show{animation:rise .45s cubic-bezier(.2,.7,.3,1) forwards}
+  @keyframes rise{from{opacity:0;transform:translateY(.5em)}to{opacity:1;transform:none}}
+
+  .demo-after::before{
+    content:"";
+    position:absolute;
+    left:-.3em;
+    right:-.3em;
+    top:.05em;
+    bottom:.05em;
+    background:var(--mark);
+    opacity:.9;
+    transform:scaleX(0);
+    transform-origin:left center;
+    z-index:-1;
+    border-radius:1px;
+  }
+  .demo-after.marked::before{animation:swipe .5s cubic-bezier(.65,0,.35,1) forwards}
+  @keyframes swipe{to{transform:scaleX(1)}}
+  .demo-after.marked{color:var(--ink)}
+
+  .reserve{
+    margin-top:3.25rem;
+    max-width:var(--measure);
+  }
+  .reserve label{display:block;font-size:.9rem;color:var(--muted);margin-bottom:.65rem}
+  .field{
+    display:flex;
+    align-items:stretch;
+    border:1px solid var(--rule);
+    background:var(--ink-deep);
+    transition:border-color .2s ease;
+  }
+  .field:focus-within{border-color:var(--mark)}
+  .prefix{
+    display:flex;
+    align-items:center;
+    padding:0 .1rem 0 .95rem;
+    font-family:"JetBrains Mono",monospace;
+    font-size:.95rem;
+    color:var(--muted);
+    user-select:none;
+  }
+  .field input{
+    flex:1;
+    min-width:0;
+    border:0;
+    background:transparent;
+    color:var(--paper);
+    font-family:"JetBrains Mono",monospace;
+    font-size:.95rem;
+    padding:.95rem .5rem;
+  }
+  .field input:focus{outline:none}
+  .field input::placeholder{color:#5f594e}
+  .field button{
+    border:0;
+    border-left:1px solid var(--rule);
+    background:var(--mark);
+    color:var(--ink);
+    font-family:"Instrument Sans",sans-serif;
+    font-weight:500;
+    font-size:.95rem;
+    padding:0 1.15rem;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:filter .18s ease;
+  }
+  .field button:hover{filter:brightness(1.09)}
+  .field button:active{transform:translateY(1px)}
+  .hint{
+    margin:.75rem 0 0;
+    font-size:.875rem;
+    color:var(--muted);
+    min-height:1.4em;
+  }
+  .hint.live{color:var(--paper)}
+
+  .section{padding:4.5rem 0;border-top:1px solid var(--rule)}
+  .section h2{font-size:clamp(1.7rem,4vw,2.4rem);max-width:20ch}
+  .section > p{max-width:var(--measure);color:var(--muted);margin:1rem 0 0}
+
+  .points{list-style:none;margin:2.75rem 0 0;padding:0;display:grid;gap:2.25rem}
+  @media (min-width:780px){.points{grid-template-columns:repeat(3,1fr);gap:2.5rem}}
+  .points li{border-left:2px solid var(--mark);padding-left:1.15rem}
+  .points h3{font-size:1.15rem;font-weight:600;letter-spacing:-.01em}
+  .points p{margin:.6rem 0 0;color:var(--muted);font-size:.97rem}
+  .points code{
+    font-family:"JetBrains Mono",monospace;
+    font-size:.85em;
+    color:var(--paper);
+    background:var(--ink-raise);
+    padding:.1em .35em;
+  }
+
+  .steps{list-style:none;counter-reset:step;margin:2.75rem 0 0;padding:0;display:grid;gap:1px;background:var(--rule)}
+  .steps li{
+    counter-increment:step;
+    background:var(--ink);
+    padding:1.6rem 0 1.6rem 3.5rem;
+    position:relative;
+  }
+  .steps li::before{
+    content:counter(step);
+    position:absolute;
+    left:0;
+    top:1.5rem;
+    font-family:"Bricolage Grotesque",sans-serif;
+    font-weight:800;
+    font-size:1.5rem;
+    color:var(--mark);
+    line-height:1;
+  }
+  .steps h3{font-size:1.1rem;font-weight:600}
+  .steps p{margin:.45rem 0 0;color:var(--muted);max-width:52ch;font-size:.97rem}
+  .steps .mono{font-family:"JetBrains Mono",monospace;font-size:.88em;color:var(--paper)}
+
+  .contact{display:grid;gap:2rem;align-items:end}
+  @media (min-width:780px){.contact{grid-template-columns:1fr auto}}
+  .mailto{
+    display:inline-block;
+    font-family:"JetBrains Mono",monospace;
+    font-size:clamp(.95rem,3vw,1.25rem);
+    text-decoration:none;
+    padding:.9rem 1.25rem;
+    border:1px solid var(--mark);
+    color:var(--mark);
+    transition:background-color .2s ease,color .2s ease;
+  }
+  .mailto:hover{background:var(--mark);color:var(--ink)}
+
+  footer{
+    border-top:1px solid var(--rule);
+    padding:2rem 0 3rem;
+    color:var(--muted);
+    font-size:.875rem;
+    display:flex;
+    justify-content:space-between;
+    gap:1rem;
+    flex-wrap:wrap;
+  }
+  footer a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--rule)}
+  footer a:hover{color:var(--paper)}
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+    .caret{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <a class="wordmark" href="/">Owenis<span class="dot">.</span>me</a>
+    <nav>
+      <a href="#what">What it does</a>
+      <a href="#how">How it works</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Your project deserves a better address.</h1>
+      <p class="lede">Firebase hands you a deploy URL with a hash in the middle of it. Owenis.me gives you a short one you can say out loud — and it keeps working when you redeploy, rename, or move the site somewhere else entirely.</p>
+
+      <div class="demo" aria-label="aurora-notes-3f9c2a.web.app becomes owenis.me/aurora">
+        <div class="demo-row">
+          <span class="demo-before" aria-hidden="true"><span id="typed"></span><span class="strike" id="strike"></span></span><span class="caret" id="caret" aria-hidden="true"></span>
+        </div>
+        <div class="demo-row"><span class="demo-verb" id="verb" aria-hidden="true">becomes</span></div>
+        <div class="demo-row"><span class="demo-after" id="after" aria-hidden="true">owenis.me/aurora</span></div>
+      </div>
+
+      <div class="reserve">
+        <label for="slug">Try a name for yours</label>
+        <div class="field">
+          <span class="prefix">owenis.me/</span>
+          <input id="slug" type="text" placeholder="aurora" autocomplete="off" spellcheck="false" maxlength="32" />
+          <button type="button" id="reserve">Reserve it</button>
+        </div>
+        <p class="hint" id="hint">Letters, numbers and dashes. Reserving opens an email to us.</p>
+      </div>
+    </section>
+
+    <section class="section" id="what">
+      <h2>One link that outlives the deploy it points at.</h2>
+      <ul class="points">
+        <li>
+          <h3>Point it anywhere</h3>
+          <p>A hosting site, a preview channel, a callable function, a doc on another domain. If it has a URL, a slug can reach it.</p>
+        </li>
+        <li>
+          <h3>Repoint without reprinting</h3>
+          <p>Move <code>/aurora</code> from the staging channel to production and every link you already shared follows along.</p>
+        </li>
+        <li>
+          <h3>Counts, not surveillance</h3>
+          <p>Clicks per slug, per day, and where they came from. No cookies, no profiles, nothing handed to anyone else.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="section" id="how">
+      <h2>Three steps, about a minute.</h2>
+      <ol class="steps">
+        <li>
+          <h3>Paste the Firebase URL</h3>
+          <p>The long one from your deploy output — <span class="mono">aurora-notes-3f9c2a.web.app</span>. Preview channel URLs work too.</p>
+        </li>
+        <li>
+          <h3>Pick the slug</h3>
+          <p>Whatever you'd actually type. Taken names tell you straight away instead of after you hit save.</p>
+        </li>
+        <li>
+          <h3>Share the short one</h3>
+          <p>Redirects go live immediately. Change the destination later and the slug doesn't move.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section contact" id="contact">
+      <div>
+        <h2>Something broken, or a slug you want held?</h2>
+        <p>Write to us and a person reads it. Include the slug and the URL it should point at, and we'll usually have an answer the same day.</p>
+      </div>
+      <a class="mailto" href="mailto:support@scribbleai.dev">support@scribbleai.dev</a>
+    </section>
+  </main>
+
+  <footer>
+    <span>© 2026 Owenis.me</span>
+    <span>Built alongside <a href="https://scribbleai.dev">Scribble</a></span>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  var LONG = "aurora-notes-3f9c2a.web.app";
+  var typed  = document.getElementById("typed");
+  var caret  = document.getElementById("caret");
+  var strike = document.getElementById("strike");
+  var verb   = document.getElementById("verb");
+  var after  = document.getElementById("after");
+
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function finish() {
+    typed.textContent = LONG;
+    caret.classList.add("done");
+    strike.classList.add("draw");
+    verb.classList.add("show");
+    after.classList.add("show", "marked");
+  }
+
+  if (reduced) {
+    finish();
+  } else {
+    var i = 0;
+    var tick = setInterval(function () {
+      typed.textContent = LONG.slice(0, ++i);
+      if (i >= LONG.length) {
+        clearInterval(tick);
+        setTimeout(function () { caret.classList.add("done"); strike.classList.add("draw"); }, 320);
+        setTimeout(function () { verb.classList.add("show"); }, 640);
+        setTimeout(function () { after.classList.add("show"); }, 780);
+        setTimeout(function () { after.classList.add("marked"); }, 1020);
+      }
+    }, 42);
+  }
+
+  var input = document.getElementById("slug");
+  var hint  = document.getElementById("hint");
+  var btn   = document.getElementById("reserve");
+  var REST  = "Letters, numbers and dashes. Reserving opens an email to us.";
+
+  function clean(v) {
+    return v.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-{2,}/g, "-").replace(/^-/, "");
+  }
+
+  input.addEventListener("input", function () {
+    var v = clean(input.value);
+    if (v !== input.value) input.value = v;
+    if (v) {
+      hint.textContent = "owenis.me/" + v;
+      hint.classList.add("live");
+    } else {
+      hint.textContent = REST;
+      hint.classList.remove("live");
+    }
+  });
+
+  btn.addEventListener("click", function () {
+    var v = clean(input.value).replace(/-$/, "");
+    if (!v) {
+      hint.textContent = "Type a name first — anything from 1 to 32 characters.";
+      hint.classList.remove("live");
+      input.focus();
+      return;
+    }
+    window.location.href =
+      "mailto:support@scribbleai.dev" +
+      "?subject=" + encodeURIComponent("Reserve owenis.me/" + v) +
+      "&body="    + encodeURIComponent("I'd like owenis.me/" + v + "\n\nIt should point at:\n");
+  });
+
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") btn.click();
+  });
+})();
+</script>
+</body>
+</html>
