@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#1b1a18" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Owenis.me — admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Instrument+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1b1a18;
+    --ink-deep:#121110;
+    --ink-raise:#232120;
+    --paper:#f4efe3;
+    --muted:#9c9384;
+    --mark:#e8c547;
+    --warn:#d98b5f;
+    --ok:#8fb996;
+    --rule:rgba(244,239,227,.14);
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--paper);
+    font-family:"Instrument Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:16px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .wrap{max-width:52rem;margin:0 auto;padding:0 1.5rem 4rem}
+
+  h1,h2{
+    font-family:"Bricolage Grotesque","Instrument Sans",sans-serif;
+    font-weight:800;
+    letter-spacing:-.02em;
+    margin:0;
+  }
+
+  a{color:inherit}
+  :focus-visible{outline:2px solid var(--mark);outline-offset:3px;border-radius:2px}
+
+  .masthead{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:1rem;padding:1.75rem 0 1.5rem;border-bottom:1px solid var(--rule);
+    margin-bottom:2.5rem;
+  }
+  .wordmark{
+    font-family:"Bricolage Grotesque",sans-serif;font-weight:800;
+    font-size:1.1rem;letter-spacing:-.03em;text-decoration:none;
+  }
+  .wordmark .dot{color:var(--mark)}
+  #who{font-size:.85rem;color:var(--muted);font-family:"JetBrains Mono",monospace}
+
+  h1{font-size:clamp(1.7rem,4vw,2.2rem)}
+  .lede{color:var(--muted);margin:.75rem 0 0;max-width:32rem}
+
+  .submit,.linklike{
+    border:0;background:var(--mark);color:var(--ink);
+    font-family:"Instrument Sans",sans-serif;font-weight:500;font-size:.95rem;
+    padding:.8rem 1.4rem;cursor:pointer;transition:filter .18s ease;
+  }
+  .submit:hover,.linklike:hover{filter:brightness(1.08)}
+  .linklike{background:transparent;border:1px solid var(--rule);color:var(--paper);padding:.5rem .9rem;font-size:.85rem}
+
+  .status{margin:1rem 0 0;font-size:.9rem;color:var(--warn);min-height:1.4em}
+
+  .board-head{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;margin-bottom:1.5rem}
+
+  .card{
+    border:1px solid var(--rule);background:var(--ink-deep);
+    padding:1.5rem;margin-bottom:1.25rem;
+  }
+  .card-top{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+  .card-top h2{font-size:1.15rem;font-family:"JetBrains Mono",monospace;font-weight:500;letter-spacing:0}
+
+  .badge{
+    font-family:"JetBrains Mono",monospace;font-size:.75rem;
+    padding:.2em .55em;border:1px solid var(--rule);color:var(--muted);white-space:nowrap;
+  }
+  .badge-new{color:var(--warn);border-color:var(--warn)}
+  .badge-dns-added{color:var(--mark);border-color:var(--mark)}
+  .badge-done{color:var(--ok);border-color:var(--ok)}
+
+  dl{display:grid;grid-template-columns:auto 1fr;gap:.35rem 1rem;margin:1rem 0 0;font-size:.92rem}
+  dt{color:var(--muted)}
+  dd{margin:0}
+  dd.mono{font-family:"JetBrains Mono",monospace}
+
+  .note{margin:.9rem 0 0;font-size:.92rem;color:var(--paper);background:var(--ink-raise);padding:.75rem .9rem;border-left:2px solid var(--mark)}
+
+  pre.dns{
+    margin:1rem 0 0;padding:.9rem 1rem;background:var(--ink-raise);
+    font-family:"JetBrains Mono",monospace;font-size:.82rem;line-height:1.5;
+    white-space:pre-wrap;word-break:break-word;max-height:14rem;overflow:auto;
+  }
+
+  .card-actions{margin-top:1.1rem;display:flex;align-items:center;gap:.6rem}
+  .card-actions label{font-size:.85rem;color:var(--muted);display:flex;align-items:center;gap:.5rem}
+  select{
+    background:var(--ink);color:var(--paper);border:1px solid var(--rule);
+    font-family:"JetBrains Mono",monospace;font-size:.85rem;padding:.4rem .5rem;
+  }
+
+  #gate{padding:3rem 0}
+  #board[hidden],#gate[hidden]{display:none}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="wordmark" href="/">Owenis<span class="dot">.</span>me</a>
+    <span id="who"></span>
+  </header>
+
+  <div id="gate">
+    <h1>Sign in to view requests.</h1>
+    <p class="lede">Restricted to the Google accounts listed in firestore.rules. Everyone else gets denied at the database, not just the UI.</p>
+    <button id="signin" class="submit">Continue with Google</button>
+    <p class="status" id="authStatus"></p>
+  </div>
+
+  <div id="board" hidden>
+    <div class="board-head">
+      <h1>Requests</h1>
+      <button id="signout" class="linklike">Sign out</button>
+    </div>
+    <p class="status" id="listStatus"></p>
+    <div id="list"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import { getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCDKOIPUhbB5ezjjv2oeDwHYba1kxPVljE",
+  authDomain: "owenisme-2e155.firebaseapp.com",
+  projectId: "owenisme-2e155",
+  storageBucket: "owenisme-2e155.firebasestorage.app",
+  messagingSenderId: "975653574383",
+  appId: "1:975653574383:web:c22386758244673f93ad1a"
+};
+
+const app      = initializeApp(firebaseConfig);
+const auth     = getAuth(app);
+const db       = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+const gate       = document.getElementById("gate");
+const board      = document.getElementById("board");
+const who        = document.getElementById("who");
+const list       = document.getElementById("list");
+const authStatus = document.getElementById("authStatus");
+const listStatus = document.getElementById("listStatus");
+
+let unsubscribe = null;
+
+document.getElementById("signin").addEventListener("click", async () => {
+  authStatus.textContent = "";
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (err) {
+    console.error(err);
+    authStatus.textContent = "Sign-in didn't go through. Try again.";
+  }
+});
+
+document.getElementById("signout").addEventListener("click", () => {
+  if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+  signOut(auth);
+});
+
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+function renderCard(docSnap) {
+  const d = docSnap.data();
+  const el = document.createElement("article");
+  el.className = "card";
+  const created = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString() : "—";
+  const statusClass = "badge-" + (d.status || "new");
+
+  el.innerHTML =
+    '<div class="card-top">' +
+      '<h2>' + escapeHtml(d.handle) + '@owenis.me</h2>' +
+      '<span class="badge ' + statusClass + '">' + escapeHtml(d.status || "new") + '</span>' +
+    '</div>' +
+    '<dl>' +
+      '<dt>Project ID</dt><dd class="mono">' + escapeHtml(d.projectId) + '</dd>' +
+      '<dt>Contact</dt><dd><a href="mailto:' + escapeHtml(d.contactEmail) + '">' + escapeHtml(d.contactEmail) + '</a></dd>' +
+      '<dt>Received</dt><dd>' + escapeHtml(created) + '</dd>' +
+    '</dl>' +
+    (d.note ? '<p class="note">' + escapeHtml(d.note) + '</p>' : '') +
+    '<pre class="dns">' + escapeHtml(d.dnsRecords) + '</pre>' +
+    '<div class="card-actions">' +
+      '<label>Status <select class="status-select">' +
+        '<option value="new">new</option>' +
+        '<option value="dns-added">dns-added</option>' +
+        '<option value="done">done</option>' +
+      '</select></label>' +
+    '</div>';
+
+  const select = el.querySelector(".status-select");
+  select.value = d.status || "new";
+  select.addEventListener("change", async () => {
+    const next = select.value;
+    select.disabled = true;
+    try {
+      await updateDoc(doc(db, "requests", docSnap.id), { status: next });
+    } catch (err) {
+      console.error(err);
+      select.value = d.status || "new";
+    } finally {
+      select.disabled = false;
+    }
+  });
+
+  return el;
+}
+
+onAuthStateChanged(auth, (user) => {
+  if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+
+  if (!user) {
+    gate.hidden = false;
+    board.hidden = true;
+    who.textContent = "";
+    return;
+  }
+
+  who.textContent = user.email;
+  gate.hidden = true;
+  board.hidden = false;
+  listStatus.textContent = "Loading…";
+  list.innerHTML = "";
+
+  const q = query(collection(db, "requests"), orderBy("createdAt", "desc"));
+  unsubscribe = onSnapshot(
+    q,
+    (snap) => {
+      listStatus.textContent = snap.empty ? "No requests yet." : "";
+      list.innerHTML = "";
+      snap.forEach((docSnap) => list.appendChild(renderCard(docSnap)));
+    },
+    (err) => {
+      console.error(err);
+      board.hidden = true;
+      gate.hidden = false;
+      if (err.code === "permission-denied") {
+        authStatus.textContent = user.email + " isn't on the admin list for this project.";
+      } else {
+        authStatus.textContent = "Couldn't load requests. Try refreshing.";
+      }
+    }
+  );
+});
+</script>
+</body>
+</html>

@@ -2,15 +2,29 @@ rules_version = '2';
 
 // Deploy with:  firebase deploy --only firestore:rules
 //
-// The site writes one document per request and never reads them back.
-// Reads, updates and deletes are closed to every client; use the Firebase
-// console or the Admin SDK to work through the queue.
+// The public site only ever creates documents. Reading, updating a
+// status, or deleting is restricted to the Google accounts listed in
+// isAdmin() below — edit that list to add or remove admins.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+             // Replace with the Google account(s) that should see requests.
+             'REPLACE_WITH_YOUR_EMAIL@gmail.com'
+           ];
+    }
+
     match /requests/{requestId} {
-      allow read, update, delete: if false;
+      allow read, delete: if isAdmin();
+
+      // Admins may only ever change the status field, never the
+      // submitted request data itself.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
 
       allow create: if
         request.resource.data.keys().hasOnly([
