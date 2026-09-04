@@ -4,8 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="theme-color" content="#1b1a18" />
-<title>Owenis.me — short links for Firebase projects</title>
-<meta name="description" content="Turn my-app-3f9c2.web.app into owenis.me/my-app. One short link for every Firebase project you ship." />
+<title>Owenis.me — a real sender address for Firebase auth emails</title>
+<meta name="description" content="Firebase signs its auth emails as noreply@your-project.firebaseapp.com. Send them from you@owenis.me instead." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Instrument+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -17,13 +17,13 @@
     --paper:#f4efe3;
     --muted:#9c9384;
     --mark:#e8c547;
+    --warn:#d98b5f;
     --rule:rgba(244,239,227,.14);
     --measure:34rem;
   }
 
   *,*::before,*::after{box-sizing:border-box}
-
-  html{-webkit-text-size-adjust:100%}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 
   body{
     margin:0;
@@ -52,176 +52,76 @@
     font-family:"Bricolage Grotesque","Instrument Sans",sans-serif;
     font-weight:800;
     letter-spacing:-.02em;
-    line-height:1.03;
+    line-height:1.05;
     margin:0;
   }
 
   a{color:inherit}
-
   :focus-visible{outline:2px solid var(--mark);outline-offset:3px;border-radius:2px}
 
   .masthead{
-    display:flex;
-    align-items:baseline;
-    justify-content:space-between;
-    gap:1.5rem;
-    padding:1.75rem 0 1.25rem;
-    flex-wrap:wrap;
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:1.5rem;padding:1.75rem 0 1.25rem;flex-wrap:wrap;
   }
   .wordmark{
-    font-family:"Bricolage Grotesque",sans-serif;
-    font-weight:800;
-    font-size:1.15rem;
-    letter-spacing:-.03em;
-    text-decoration:none;
+    font-family:"Bricolage Grotesque",sans-serif;font-weight:800;
+    font-size:1.15rem;letter-spacing:-.03em;text-decoration:none;
   }
   .wordmark .dot{color:var(--mark)}
   .masthead nav{display:flex;gap:1.5rem;font-size:.95rem}
   .masthead nav a{
-    color:var(--muted);
-    text-decoration:none;
-    padding-bottom:2px;
+    color:var(--muted);text-decoration:none;padding-bottom:2px;
     border-bottom:1px solid transparent;
     transition:color .18s ease,border-color .18s ease;
   }
   .masthead nav a:hover{color:var(--paper);border-bottom-color:var(--mark)}
 
   .hero{padding:4.5rem 0 5rem;border-top:1px solid var(--rule)}
-  .hero h1{font-size:clamp(2.6rem,7.5vw,5rem);max-width:16ch}
-  .hero .lede{
-    margin:1.6rem 0 0;
-    max-width:var(--measure);
-    color:var(--muted);
-    font-size:1.075rem;
-  }
-  .hero .lede b{color:var(--paper);font-weight:500}
+  .hero h1{font-size:clamp(2.4rem,6.8vw,4.5rem);max-width:17ch}
+  .hero .lede{margin:1.6rem 0 0;max-width:var(--measure);color:var(--muted);font-size:1.075rem}
 
   .demo{
     margin:3rem 0 0;
     font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
-    font-size:clamp(.85rem,2.9vw,1.15rem);
+    font-size:clamp(.72rem,2.6vw,1.05rem);
   }
   .demo-row{display:flex;align-items:center;gap:.9rem;min-height:2.4em}
   .demo-before{position:relative;display:inline-block;color:var(--muted);white-space:nowrap}
   .caret{
-    display:inline-block;
-    width:.55em;
-    height:1.1em;
-    background:var(--mark);
-    vertical-align:-.18em;
-    margin-left:.1em;
-    animation:blink 1s steps(1) infinite;
+    display:inline-block;width:.55em;height:1.1em;background:var(--mark);
+    vertical-align:-.18em;margin-left:.1em;animation:blink 1s steps(1) infinite;
   }
   .caret.done{animation:none;opacity:0}
   @keyframes blink{50%{opacity:0}}
 
   .strike{
-    position:absolute;
-    left:-.15em;
-    top:52%;
-    height:2px;
-    width:0;
-    background:var(--paper);
-    transform:rotate(-1.2deg);
-    transform-origin:left center;
+    position:absolute;left:-.15em;top:52%;height:2px;width:0;
+    background:var(--paper);transform:rotate(-1.2deg);transform-origin:left center;
   }
   .strike.draw{animation:strike .38s cubic-bezier(.6,0,.35,1) forwards}
   @keyframes strike{to{width:calc(100% + .3em)}}
 
   .demo-verb{
-    font-family:"Instrument Sans",sans-serif;
-    color:var(--muted);
-    font-size:.85rem;
-    opacity:0;
-    padding-left:.1em;
+    font-family:"Instrument Sans",sans-serif;color:var(--muted);
+    font-size:.85rem;opacity:0;padding-left:.1em;
   }
   .demo-verb.show{animation:rise .4s ease forwards}
 
   .demo-after{
-    position:relative;
-    display:inline-block;
-    color:var(--paper);
-    font-weight:500;
-    white-space:nowrap;
-    opacity:0;
+    position:relative;display:inline-block;color:var(--paper);
+    font-weight:500;white-space:nowrap;opacity:0;
   }
   .demo-after.show{animation:rise .45s cubic-bezier(.2,.7,.3,1) forwards}
   @keyframes rise{from{opacity:0;transform:translateY(.5em)}to{opacity:1;transform:none}}
 
   .demo-after::before{
-    content:"";
-    position:absolute;
-    left:-.3em;
-    right:-.3em;
-    top:.05em;
-    bottom:.05em;
-    background:var(--mark);
-    opacity:.9;
-    transform:scaleX(0);
-    transform-origin:left center;
-    z-index:-1;
-    border-radius:1px;
+    content:"";position:absolute;left:-.3em;right:-.3em;top:.05em;bottom:.05em;
+    background:var(--mark);opacity:.9;transform:scaleX(0);
+    transform-origin:left center;z-index:-1;border-radius:1px;
   }
   .demo-after.marked::before{animation:swipe .5s cubic-bezier(.65,0,.35,1) forwards}
   @keyframes swipe{to{transform:scaleX(1)}}
   .demo-after.marked{color:var(--ink)}
-
-  .reserve{
-    margin-top:3.25rem;
-    max-width:var(--measure);
-  }
-  .reserve label{display:block;font-size:.9rem;color:var(--muted);margin-bottom:.65rem}
-  .field{
-    display:flex;
-    align-items:stretch;
-    border:1px solid var(--rule);
-    background:var(--ink-deep);
-    transition:border-color .2s ease;
-  }
-  .field:focus-within{border-color:var(--mark)}
-  .prefix{
-    display:flex;
-    align-items:center;
-    padding:0 .1rem 0 .95rem;
-    font-family:"JetBrains Mono",monospace;
-    font-size:.95rem;
-    color:var(--muted);
-    user-select:none;
-  }
-  .field input{
-    flex:1;
-    min-width:0;
-    border:0;
-    background:transparent;
-    color:var(--paper);
-    font-family:"JetBrains Mono",monospace;
-    font-size:.95rem;
-    padding:.95rem .5rem;
-  }
-  .field input:focus{outline:none}
-  .field input::placeholder{color:#5f594e}
-  .field button{
-    border:0;
-    border-left:1px solid var(--rule);
-    background:var(--mark);
-    color:var(--ink);
-    font-family:"Instrument Sans",sans-serif;
-    font-weight:500;
-    font-size:.95rem;
-    padding:0 1.15rem;
-    cursor:pointer;
-    white-space:nowrap;
-    transition:filter .18s ease;
-  }
-  .field button:hover{filter:brightness(1.09)}
-  .field button:active{transform:translateY(1px)}
-  .hint{
-    margin:.75rem 0 0;
-    font-size:.875rem;
-    color:var(--muted);
-    min-height:1.4em;
-  }
-  .hint.live{color:var(--paper)}
 
   .section{padding:4.5rem 0;border-top:1px solid var(--rule)}
   .section h2{font-size:clamp(1.7rem,4vw,2.4rem);max-width:20ch}
@@ -230,66 +130,82 @@
   .points{list-style:none;margin:2.75rem 0 0;padding:0;display:grid;gap:2.25rem}
   @media (min-width:780px){.points{grid-template-columns:repeat(3,1fr);gap:2.5rem}}
   .points li{border-left:2px solid var(--mark);padding-left:1.15rem}
-  .points h3{font-size:1.15rem;font-weight:600;letter-spacing:-.01em}
+  .points li.limit{border-left-color:var(--warn)}
+  .points h3{font-size:1.1rem;font-weight:600;letter-spacing:-.01em}
   .points p{margin:.6rem 0 0;color:var(--muted);font-size:.97rem}
-  .points code{
-    font-family:"JetBrains Mono",monospace;
-    font-size:.85em;
-    color:var(--paper);
-    background:var(--ink-raise);
-    padding:.1em .35em;
+  code{
+    font-family:"JetBrains Mono",monospace;font-size:.85em;
+    color:var(--paper);background:var(--ink-raise);padding:.1em .35em;
   }
 
   .steps{list-style:none;counter-reset:step;margin:2.75rem 0 0;padding:0;display:grid;gap:1px;background:var(--rule)}
-  .steps li{
-    counter-increment:step;
-    background:var(--ink);
-    padding:1.6rem 0 1.6rem 3.5rem;
-    position:relative;
-  }
+  .steps li{counter-increment:step;background:var(--ink);padding:1.6rem 0 1.6rem 3.5rem;position:relative}
   .steps li::before{
-    content:counter(step);
-    position:absolute;
-    left:0;
-    top:1.5rem;
-    font-family:"Bricolage Grotesque",sans-serif;
-    font-weight:800;
-    font-size:1.5rem;
-    color:var(--mark);
-    line-height:1;
+    content:counter(step);position:absolute;left:0;top:1.5rem;
+    font-family:"Bricolage Grotesque",sans-serif;font-weight:800;
+    font-size:1.5rem;color:var(--mark);line-height:1;
   }
   .steps h3{font-size:1.1rem;font-weight:600}
-  .steps p{margin:.45rem 0 0;color:var(--muted);max-width:52ch;font-size:.97rem}
-  .steps .mono{font-family:"JetBrains Mono",monospace;font-size:.88em;color:var(--paper)}
+  .steps p{margin:.45rem 0 0;color:var(--muted);max-width:54ch;font-size:.97rem}
+
+  form{margin:2.75rem 0 0;max-width:40rem;display:grid;gap:1.5rem}
+  .row{display:grid;gap:.6rem}
+  .row label{font-size:.92rem;color:var(--paper)}
+  .row .help{font-size:.85rem;color:var(--muted);margin:0}
+
+  .field{display:flex;align-items:stretch;border:1px solid var(--rule);background:var(--ink-deep);transition:border-color .2s ease}
+  .field:focus-within{border-color:var(--mark)}
+  .field .suffix,.field .prefix{
+    display:flex;align-items:center;padding:0 .95rem;
+    font-family:"JetBrains Mono",monospace;font-size:.92rem;
+    color:var(--muted);user-select:none;white-space:nowrap;
+  }
+  input,textarea{
+    flex:1;min-width:0;width:100%;border:0;background:transparent;color:var(--paper);
+    font-family:"JetBrains Mono",monospace;font-size:.92rem;padding:.85rem .95rem;
+    line-height:1.55;resize:vertical;
+  }
+  .field input{padding-right:.25rem}
+  input:focus,textarea:focus{outline:none}
+  input::placeholder,textarea::placeholder{color:#5f594e}
+  textarea{
+    border:1px solid var(--rule);background:var(--ink-deep);
+    min-height:9rem;transition:border-color .2s ease;
+  }
+  textarea:focus{border-color:var(--mark)}
+
+  .submit{
+    justify-self:start;border:0;background:var(--mark);color:var(--ink);
+    font-family:"Instrument Sans",sans-serif;font-weight:500;font-size:1rem;
+    padding:.85rem 1.6rem;cursor:pointer;transition:filter .18s ease;
+  }
+  .submit:hover:not(:disabled){filter:brightness(1.09)}
+  .submit:disabled{opacity:.5;cursor:not-allowed}
+
+  .status{margin:0;font-size:.95rem;min-height:1.5em;color:var(--muted)}
+  .status.ok{color:var(--mark)}
+  .status.bad{color:var(--warn)}
+  .status .ref{font-family:"JetBrains Mono",monospace;color:var(--paper)}
 
   .contact{display:grid;gap:2rem;align-items:end}
   @media (min-width:780px){.contact{grid-template-columns:1fr auto}}
   .mailto{
-    display:inline-block;
-    font-family:"JetBrains Mono",monospace;
-    font-size:clamp(.95rem,3vw,1.25rem);
-    text-decoration:none;
-    padding:.9rem 1.25rem;
-    border:1px solid var(--mark);
-    color:var(--mark);
+    display:inline-block;font-family:"JetBrains Mono",monospace;
+    font-size:clamp(.95rem,3vw,1.25rem);text-decoration:none;
+    padding:.9rem 1.25rem;border:1px solid var(--mark);color:var(--mark);
     transition:background-color .2s ease,color .2s ease;
   }
   .mailto:hover{background:var(--mark);color:var(--ink)}
 
   footer{
-    border-top:1px solid var(--rule);
-    padding:2rem 0 3rem;
-    color:var(--muted);
-    font-size:.875rem;
-    display:flex;
-    justify-content:space-between;
-    gap:1rem;
-    flex-wrap:wrap;
+    border-top:1px solid var(--rule);padding:2rem 0 3rem;color:var(--muted);
+    font-size:.875rem;display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;
   }
   footer a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--rule)}
   footer a:hover{color:var(--paper)}
 
   @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
     *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
     .caret{display:none}
   }
@@ -302,76 +218,119 @@
   <header class="masthead">
     <a class="wordmark" href="/">Owenis<span class="dot">.</span>me</a>
     <nav>
-      <a href="#what">What it does</a>
+      <a href="#scope">What changes</a>
       <a href="#how">How it works</a>
-      <a href="#contact">Contact</a>
+      <a href="#request">Request a name</a>
     </nav>
   </header>
 
   <main>
     <section class="hero">
-      <h1>Your project deserves a better address.</h1>
-      <p class="lede">Firebase hands you a deploy URL with a hash in the middle of it. Owenis.me gives you a short one you can say out loud — and it keeps working when you redeploy, rename, or move the site somewhere else entirely.</p>
+      <h1>Your login emails come from a stranger.</h1>
+      <p class="lede">Firebase signs every verification and password-reset email as noreply@ your project id .firebaseapp.com. People don't recognise it, and neither do spam filters. Pick a name here and those same emails go out from owenis.me instead.</p>
 
-      <div class="demo" aria-label="aurora-notes-3f9c2a.web.app becomes owenis.me/aurora">
+      <div class="demo" aria-label="noreply at aurora-notes-3f9c2a.firebaseapp.com becomes scribble at owenis.me">
         <div class="demo-row">
           <span class="demo-before" aria-hidden="true"><span id="typed"></span><span class="strike" id="strike"></span></span><span class="caret" id="caret" aria-hidden="true"></span>
         </div>
         <div class="demo-row"><span class="demo-verb" id="verb" aria-hidden="true">becomes</span></div>
-        <div class="demo-row"><span class="demo-after" id="after" aria-hidden="true">owenis.me/aurora</span></div>
-      </div>
-
-      <div class="reserve">
-        <label for="slug">Try a name for yours</label>
-        <div class="field">
-          <span class="prefix">owenis.me/</span>
-          <input id="slug" type="text" placeholder="aurora" autocomplete="off" spellcheck="false" maxlength="32" />
-          <button type="button" id="reserve">Reserve it</button>
-        </div>
-        <p class="hint" id="hint">Letters, numbers and dashes. Reserving opens an email to us.</p>
+        <div class="demo-row"><span class="demo-after" id="after" aria-hidden="true">scribble@owenis.me</span></div>
       </div>
     </section>
 
-    <section class="section" id="what">
-      <h2>One link that outlives the deploy it points at.</h2>
+    <section class="section" id="scope">
+      <h2>Read this before you start.</h2>
       <ul class="points">
         <li>
-          <h3>Point it anywhere</h3>
-          <p>A hosting site, a preview channel, a callable function, a doc on another domain. If it has a URL, a slug can reach it.</p>
+          <h3>The sender changes</h3>
+          <p>Every auth email Firebase sends for your project — verification, password reset, email change, sign-in links — arrives from the name you pick.</p>
+        </li>
+        <li class="limit">
+          <h3>Action URLs don't</h3>
+          <p>The links inside those emails still point at your own Firebase domain. Owenis.me doesn't host action URLs, and asking for one won't get you one.</p>
         </li>
         <li>
-          <h3>Repoint without reprinting</h3>
-          <p>Move <code>/aurora</code> from the staging channel to production and every link you already shared follows along.</p>
-        </li>
-        <li>
-          <h3>Counts, not surveillance</h3>
-          <p>Clicks per slug, per day, and where they came from. No cookies, no profiles, nothing handed to anyone else.</p>
+          <h3>We hold the DNS</h3>
+          <p>owenis.me is our zone, so you can't add the records Firebase asks you for. That's the whole reason this form exists — paste them and we'll add them.</p>
         </li>
       </ul>
     </section>
 
     <section class="section" id="how">
-      <h2>Three steps, about a minute.</h2>
+      <h2>Five steps. Most of them are Firebase's.</h2>
       <ol class="steps">
         <li>
-          <h3>Paste the Firebase URL</h3>
-          <p>The long one from your deploy output — <span class="mono">aurora-notes-3f9c2a.web.app</span>. Preview channel URLs work too.</p>
+          <h3>Open your email templates</h3>
+          <p>Firebase console, then Authentication, then Templates. Any template will do — they all share one sender.</p>
         </li>
         <li>
-          <h3>Pick the slug</h3>
-          <p>Whatever you'd actually type. Taken names tell you straight away instead of after you hit save.</p>
+          <h3>Start customising the domain</h3>
+          <p>Click the pencil on the template, then the customise-domain option next to the From address. Enter <code>owenis.me</code>.</p>
         </li>
         <li>
-          <h3>Share the short one</h3>
-          <p>Redirects go live immediately. Change the destination later and the slug doesn't move.</p>
+          <h3>Copy every record Firebase shows you</h3>
+          <p>You'll get a table of TXT, CNAME and MX rows. Copy all of it, host names and values included. Don't leave the page — you'll need it verified later.</p>
+        </li>
+        <li>
+          <h3>Paste it below</h3>
+          <p>Along with your project ID and the name you want in front of the @. That's everything we need.</p>
+        </li>
+        <li>
+          <h3>We add the records, you hit verify</h3>
+          <p>We'll email you once they're live in the zone — usually within a day. Go back to that Firebase page and click verify, and the sender switches over.</p>
         </li>
       </ol>
     </section>
 
+    <section class="section" id="request">
+      <h2>Request a name.</h2>
+      <p>One name per Firebase project. If someone's already taken the one you want, or two projects collide on the same records, we'll put you on a subdomain like <code>scribble.owenis.me</code> and say so in the reply.</p>
+
+      <form id="request-form" novalidate>
+        <div class="row">
+          <label for="handle">The name you want</label>
+          <div class="field">
+            <input id="handle" name="handle" type="text" placeholder="scribble" autocomplete="off" spellcheck="false" maxlength="32" required />
+            <span class="suffix">@owenis.me</span>
+          </div>
+          <p class="help">Lowercase letters, numbers and dashes.</p>
+        </div>
+
+        <div class="row">
+          <label for="projectId">Firebase project ID</label>
+          <div class="field">
+            <input id="projectId" name="projectId" type="text" placeholder="aurora-notes-3f9c2a" autocomplete="off" spellcheck="false" maxlength="120" required />
+          </div>
+          <p class="help">Project settings, General, Project ID. Not the display name.</p>
+        </div>
+
+        <div class="row">
+          <label for="contactEmail">Where we reply</label>
+          <div class="field">
+            <input id="contactEmail" name="contactEmail" type="email" placeholder="you@example.com" autocomplete="email" maxlength="200" required />
+          </div>
+        </div>
+
+        <div class="row">
+          <label for="dnsRecords">The DNS records Firebase gave you</label>
+          <textarea id="dnsRecords" name="dnsRecords" maxlength="5000" required placeholder="TXT   owenis.me            firebase=aurora-notes-3f9c2a&#10;CNAME firebase1._domainkey  mail-...&#10;MX    owenis.me            10 ..."></textarea>
+          <p class="help">Paste the whole table. Rough formatting is fine — we'd rather have too much than too little.</p>
+        </div>
+
+        <div class="row">
+          <label for="note">Anything else (optional)</label>
+          <textarea id="note" name="note" maxlength="1000" style="min-height:5rem" placeholder="Deadlines, a second project, a name you'd settle for."></textarea>
+        </div>
+
+        <button class="submit" type="submit" id="submit">Send the request</button>
+        <p class="status" id="status"></p>
+      </form>
+    </section>
+
     <section class="section contact" id="contact">
       <div>
-        <h2>Something broken, or a slug you want held?</h2>
-        <p>Write to us and a person reads it. Include the slug and the URL it should point at, and we'll usually have an answer the same day.</p>
+        <h2>Stuck, or waiting too long?</h2>
+        <p>Write to us with your project ID and we'll find your request. A person reads these.</p>
       </div>
       <a class="mailto" href="mailto:support@scribbleai.dev">support@scribbleai.dev</a>
     </section>
@@ -384,79 +343,123 @@
 
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+/* ---------------------------------------------------------------
+   PASTE YOUR FIREBASE WEB CONFIG HERE.
+   Firebase console > Project settings > General > Your apps > Web app.
+   These values are meant to be public; security comes from the rules
+   in firestore.rules, not from hiding this.
+   --------------------------------------------------------------- */
+const firebaseConfig = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+
+const form   = document.getElementById("request-form");
+const status = document.getElementById("status");
+const submit = document.getElementById("submit");
+const handle = document.getElementById("handle");
+
+let db = null;
+if (firebaseConfig.projectId) {
+  try {
+    db = getFirestore(initializeApp(firebaseConfig));
+  } catch (err) {
+    console.error("Firebase init failed", err);
+  }
+}
+
+if (!db) {
+  submit.disabled = true;
+  status.textContent = "Requests aren't open yet — email support@scribbleai.dev and we'll set you up by hand.";
+}
+
+handle.addEventListener("input", () => {
+  const v = handle.value.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-{2,}/g, "-").replace(/^-/, "");
+  if (v !== handle.value) handle.value = v;
+});
+
+function fail(msg, el) {
+  status.textContent = msg;
+  status.className = "status bad";
+  if (el) el.focus();
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!db) return;
+
+  const payload = {
+    handle:       handle.value.trim().replace(/-$/, ""),
+    projectId:    document.getElementById("projectId").value.trim(),
+    contactEmail: document.getElementById("contactEmail").value.trim(),
+    dnsRecords:   document.getElementById("dnsRecords").value.trim(),
+    note:         document.getElementById("note").value.trim()
+  };
+
+  if (!payload.handle)       return fail("Pick a name to go in front of the @.", handle);
+  if (!payload.projectId)    return fail("We need the project ID to match the records to your project.", document.getElementById("projectId"));
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(payload.contactEmail))
+                             return fail("That email address doesn't look complete.", document.getElementById("contactEmail"));
+  if (payload.dnsRecords.length < 20)
+                             return fail("Paste the records Firebase showed you — there should be several lines.", document.getElementById("dnsRecords"));
+
+  submit.disabled = true;
+  status.className = "status";
+  status.textContent = "Sending…";
+
+  try {
+    const ref = await addDoc(collection(db, "requests"), {
+      ...payload,
+      status: "new",
+      userAgent: navigator.userAgent.slice(0, 300),
+      createdAt: serverTimestamp()
+    });
+    form.reset();
+    status.className = "status ok";
+    status.innerHTML = 'Got it. Your reference is <span class="ref">' + ref.id.slice(0, 8) + '</span> — quote it if you email us.';
+  } catch (err) {
+    console.error(err);
+    submit.disabled = false;
+    fail("That didn't send. Try again, or email support@scribbleai.dev with the same details.");
+  }
+});
+
+/* hero type-and-strike sequence */
 (function () {
-  var LONG = "aurora-notes-3f9c2a.web.app";
-  var typed  = document.getElementById("typed");
-  var caret  = document.getElementById("caret");
-  var strike = document.getElementById("strike");
-  var verb   = document.getElementById("verb");
-  var after  = document.getElementById("after");
+  const LONG = "noreply@aurora-notes-3f9c2a.firebaseapp.com";
+  const typed  = document.getElementById("typed");
+  const caret  = document.getElementById("caret");
+  const strike = document.getElementById("strike");
+  const verb   = document.getElementById("verb");
+  const after  = document.getElementById("after");
 
-  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  function finish() {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     typed.textContent = LONG;
     caret.classList.add("done");
     strike.classList.add("draw");
     verb.classList.add("show");
     after.classList.add("show", "marked");
+    return;
   }
 
-  if (reduced) {
-    finish();
-  } else {
-    var i = 0;
-    var tick = setInterval(function () {
-      typed.textContent = LONG.slice(0, ++i);
-      if (i >= LONG.length) {
-        clearInterval(tick);
-        setTimeout(function () { caret.classList.add("done"); strike.classList.add("draw"); }, 320);
-        setTimeout(function () { verb.classList.add("show"); }, 640);
-        setTimeout(function () { after.classList.add("show"); }, 780);
-        setTimeout(function () { after.classList.add("marked"); }, 1020);
-      }
-    }, 42);
-  }
-
-  var input = document.getElementById("slug");
-  var hint  = document.getElementById("hint");
-  var btn   = document.getElementById("reserve");
-  var REST  = "Letters, numbers and dashes. Reserving opens an email to us.";
-
-  function clean(v) {
-    return v.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-{2,}/g, "-").replace(/^-/, "");
-  }
-
-  input.addEventListener("input", function () {
-    var v = clean(input.value);
-    if (v !== input.value) input.value = v;
-    if (v) {
-      hint.textContent = "owenis.me/" + v;
-      hint.classList.add("live");
-    } else {
-      hint.textContent = REST;
-      hint.classList.remove("live");
-    }
-  });
-
-  btn.addEventListener("click", function () {
-    var v = clean(input.value).replace(/-$/, "");
-    if (!v) {
-      hint.textContent = "Type a name first — anything from 1 to 32 characters.";
-      hint.classList.remove("live");
-      input.focus();
-      return;
-    }
-    window.location.href =
-      "mailto:support@scribbleai.dev" +
-      "?subject=" + encodeURIComponent("Reserve owenis.me/" + v) +
-      "&body="    + encodeURIComponent("I'd like owenis.me/" + v + "\n\nIt should point at:\n");
-  });
-
-  input.addEventListener("keydown", function (e) {
-    if (e.key === "Enter") btn.click();
-  });
+  let i = 0;
+  const tick = setInterval(() => {
+    typed.textContent = LONG.slice(0, ++i);
+    if (i < LONG.length) return;
+    clearInterval(tick);
+    setTimeout(() => { caret.classList.add("done"); strike.classList.add("draw"); }, 320);
+    setTimeout(() => verb.classList.add("show"), 640);
+    setTimeout(() => after.classList.add("show"), 780);
+    setTimeout(() => after.classList.add("marked"), 1020);
+  }, 34);
 })();
 </script>
 </body>
